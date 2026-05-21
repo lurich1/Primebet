@@ -141,6 +141,9 @@ export default function MePage() {
     : '/register'
 
   const handleWithdraw = () => {
+    if (typeof console !== 'undefined') {
+      console.log('[withdraw] click → opening modal, profile:', profile?.id, 'step:', profile?.verificationStep)
+    }
     setWithdrawMsg(null)
     setWithdrawError(null)
     setWithdrawAmount('')
@@ -481,14 +484,20 @@ export default function MePage() {
         onLoad={() => setSdkReady(true)}
       />
 
-      {/* Withdraw sheet */}
-      {withdrawOpen && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setWithdrawOpen(false)}
-            aria-hidden
-          />
+      {/* Withdraw sheet — always rendered, visibility toggled via style so the
+          click handler can never get caught by a conditional-render race. */}
+      <div
+        className="fixed inset-0 z-[60] items-end sm:items-center justify-center p-4"
+        style={{ display: withdrawOpen ? 'flex' : 'none' }}
+        role="dialog"
+        aria-hidden={!withdrawOpen}
+      >
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={() => setWithdrawOpen(false)}
+          aria-hidden
+        />
+        {profile && (
           <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">
@@ -611,8 +620,8 @@ export default function MePage() {
             </form>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
