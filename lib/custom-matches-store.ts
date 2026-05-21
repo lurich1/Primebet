@@ -35,19 +35,63 @@ function parseMinute(raw: string | null): number | null {
   return base + extra
 }
 
-/** Compute the live-ticking minute. Returns the display string. */
+/** Deterministic 1-4 minute stoppage derived from match id + half index. */
+function stoppageFor(matchId: string, half: 1 | 2): number {
+  let h = 0
+  for (let i = 0; i < matchId.length; i++) {
+    h = (h * 31 + matchId.charCodeAt(i) + half) | 0
+  }
+  return (Math.abs(h) % 4) + 1 // 1..4
+}
+
+const HT_BREAK_MINUTES = 15
+
+/**
+ * Football clock: ticks from the stored start minute through stoppage
+ * at 45 → automatic HT (15 min real-time pause) → second half → stoppage
+ * at 90 → automatic FT. Random stoppage time is deterministic per match.
+ */
 function tickingMinute(row: CustomMatchRow): string | undefined {
   if (!row.is_live) return row.minute ?? undefined
+  // Honour explicit HT / FT the admin entered — no automatic override.
   if (row.minute === 'FT' || row.minute === 'HT') return row.minute
+
   const start = parseMinute(row.minute)
   if (start === null) return row.minute ?? undefined
   if (!row.minute_set_at) return `${start}'`
   const setAt = new Date(row.minute_set_at).getTime()
   if (Number.isNaN(setAt)) return `${start}'`
+
   const elapsedMin = Math.max(0, Math.floor((Date.now() - setAt) / 60_000))
-  // Cap at 120' so a forgotten live match doesn't display "8473'".
-  const current = Math.min(120, start + elapsedMin)
-  return `${current}'`
+  const stoppage1 = stoppageFor(row.id, 1)
+  const stoppage2 = stoppageFor(row.id, 2)
+
+  // First-half regime (start <= 45). Tick through 1..45, then 45+1..45+N
+  // stoppage, then HT (15 min of real time), then 46..90, then 90+1..90+M
+  // stoppage, then FT.
+  if (start <= 45) {
+    const reached = start + elapsedMin
+    if (reached < 45) return `${reached}'`
+    if (reached < 45 + stoppage1) return `45+${reached - 45 + 1}'`
+    if (reached < 45 + stoppage1 + HT_BREAK_MINUTES) return 'HT'
+    const secondHalf = 46 + (reached - 45 - stoppage1 - HT_BREAK_MINUTES)
+    if (secondHalf <= 90) return `${secondHalf}'`
+    if (secondHalf < 90 + stoppage2) return `90+${secondHalf - 90 + 1}'`
+    return 'FT'
+  }
+
+  // Second-half regime (admin entered a minute > 45). No HT to worry about.
+  if (start <= 90) {
+    const reached = start + elapsedMin
+    if (reached <= 90) return `${reached}'`
+    if (reached < 90 + stoppage2) return `90+${reached - 90 + 1}'`
+    return 'FT'
+  }
+
+  // Already in 90+ stoppage when admin set it (e.g. start = 92).
+  const totalStoppage = start - 90 + elapsedMin
+  if (totalStoppage < stoppage2) return `90+${totalStoppage + 1}'`
+  return 'FT'
 }
 
 function rowToMatch(row: CustomMatchRow): Match {
