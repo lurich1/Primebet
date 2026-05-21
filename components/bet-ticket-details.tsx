@@ -78,7 +78,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
           {/* Trophy below */}
           <div className="relative w-56 h-56 sm:w-72 sm:h-72 mt-6 sm:mt-8">
             <Image
-              src="/won_trophy_image.jpg"
+              src="/won_trophy_image.png"
               alt="Trophy"
               fill
               priority
