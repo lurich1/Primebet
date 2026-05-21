@@ -275,11 +275,33 @@ export default function AdminBetsPage() {
                               : s.selection === 'away'
                                 ? s.match.awayTeam
                                 : 'Draw'
+                          const legStatus = s.status ?? 'pending'
+                          const legBorder =
+                            legStatus === 'won'
+                              ? 'border-l-2 border-success bg-success/10'
+                              : legStatus === 'lost'
+                                ? 'border-l-2 border-destructive bg-destructive/10'
+                                : 'border-l-2 border-transparent'
+                          const teamColor =
+                            legStatus === 'won'
+                              ? 'text-success'
+                              : legStatus === 'lost'
+                                ? 'text-destructive'
+                                : 'text-foreground'
                           return (
-                            <div key={s.matchId} className="text-xs">
+                            <div
+                              key={s.id || s.matchId}
+                              className={`text-xs py-1 pl-2 pr-1 rounded-r ${legBorder}`}
+                            >
                               <div className="flex justify-between gap-2">
-                                <span className="truncate font-medium">
+                                <span className={`truncate font-medium ${teamColor}`}>
                                   {s.match.homeTeam} vs {s.match.awayTeam}
+                                  {legStatus === 'won' && (
+                                    <span className="ml-1.5 text-[10px] font-bold">✓</span>
+                                  )}
+                                  {legStatus === 'lost' && (
+                                    <span className="ml-1.5 text-[10px] font-bold">✗</span>
+                                  )}
                                 </span>
                                 <span className="font-semibold text-primary shrink-0 tabular-nums">
                                   {s.odds.toFixed(2)}

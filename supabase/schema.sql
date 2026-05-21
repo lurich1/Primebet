@@ -100,10 +100,14 @@ create table if not exists public.bet_selections (
     market_label   text not null default '',
     outcome_key    text not null,
     outcome_label  text not null default '',
-    odds           numeric(18, 4) not null check (odds >= 1)
+    odds           numeric(18, 4) not null check (odds >= 1),
+    -- Per-leg result so the bet card can colour each match green/red
+    status         text not null default 'pending'
+                   check (status in ('pending', 'won', 'lost'))
 );
 
 create index if not exists idx_bet_selections_bet on public.bet_selections (bet_id);
+create index if not exists idx_bet_selections_status on public.bet_selections (bet_id, status);
 
 -- ============================================================================
 -- 6. CUSTOM_MATCHES (admin-added matches)

@@ -631,11 +631,31 @@ function BetCard({ bet, expanded, onToggle, onSettle, onDelete }: BetCardProps) 
           <div className="pt-3 space-y-1.5">
             {bet.selections.map((raw) => {
               const s = hydrateLegacySelection(raw)
+              const legStatus = s.status ?? 'pending'
+              // Sportybet-style: each leg coloured by its own result
+              const legClasses =
+                legStatus === 'won'
+                  ? 'border-l-2 border-success bg-success/10 pl-2'
+                  : legStatus === 'lost'
+                    ? 'border-l-2 border-destructive bg-destructive/10 pl-2'
+                    : 'border-l-2 border-transparent pl-2'
+              const teamColor =
+                legStatus === 'won'
+                  ? 'text-success'
+                  : legStatus === 'lost'
+                    ? 'text-destructive'
+                    : 'text-foreground'
               return (
-                <div key={s.id} className="text-xs">
+                <div key={s.id} className={`text-xs py-1 rounded-r ${legClasses}`}>
                   <div className="flex justify-between gap-2">
-                    <span className="truncate text-foreground font-medium">
+                    <span className={`truncate font-medium ${teamColor}`}>
                       {s.match.homeTeam} vs {s.match.awayTeam}
+                      {legStatus === 'won' && (
+                        <span className="ml-1.5 text-[10px] font-bold uppercase">✓</span>
+                      )}
+                      {legStatus === 'lost' && (
+                        <span className="ml-1.5 text-[10px] font-bold uppercase">✗</span>
+                      )}
                     </span>
                     <span className="font-semibold text-primary shrink-0 tabular-nums">
                       {s.odds.toFixed(2)}

@@ -32,6 +32,7 @@ interface BetSelectionRow {
   outcome_key: string
   outcome_label: string
   odds: number
+  status: 'pending' | 'won' | 'lost' | null
 }
 
 function rowToSelection(row: BetSelectionRow): BetSelection {
@@ -56,6 +57,7 @@ function rowToSelection(row: BetSelectionRow): BetSelection {
     selection: row.market_key === '1x2'
       ? (row.outcome_key as 'home' | 'draw' | 'away')
       : undefined,
+    status: row.status ?? 'pending',
   }
 }
 
@@ -212,6 +214,22 @@ export async function updateBet(
   if (!data) return null
   const selectionsByBet = await loadSelectionsFor([data.id])
   return rowToBet(data as BetRow, selectionsByBet.get(data.id) ?? [])
+}
+
+/**
+ * Bulk-set the status of every selection on a bet (used when settling).
+ * Pass 'won' to mark them all winners (cashout) or 'lost' to mark them all
+ * losers. Per-leg control can come later.
+ */
+export async function setSelectionStatusForBet(
+  betId: string,
+  status: 'won' | 'lost' | 'pending',
+): Promise<void> {
+  const { error } = await supabaseServer()
+    .from('bet_selections')
+    .update({ status })
+    .eq('bet_id', betId)
+  if (error) throw new Error(`bet_selections.setStatus: ${error.message}`)
 }
 
 export async function deleteBet(id: string): Promise<boolean> {

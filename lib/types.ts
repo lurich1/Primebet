@@ -59,6 +59,8 @@ export interface BetSelection {
   outcomeLabel: string
   odds: number
   selection?: 'home' | 'draw' | 'away'
+  /** Per-leg result: 'pending' until the bet settles, then 'won' / 'lost'. */
+  status?: 'pending' | 'won' | 'lost'
 }
 
 export interface League {

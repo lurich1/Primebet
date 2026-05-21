@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { updateBet, deleteBet } from '@/lib/bets-store'
+import { updateBet, deleteBet, setSelectionStatusForBet } from '@/lib/bets-store'
 import { creditBalance } from '@/lib/users-store'
 import { supabaseServer } from '@/lib/supabase'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
@@ -65,6 +65,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (status === 'won') {
     const payout = Number(existing.potential_win)
+    // Mark every selection as 'won' first so the bet read returns the right
+    // colors. Then update the parent bet.
+    await setSelectionStatusForBet(id, 'won')
     const updated = await updateBet(id, { status, settledAt, payout })
     if (!updated) {
       return NextResponse.json({ error: 'bet not found' }, { status: 404 })
@@ -77,7 +80,9 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ bet: updated })
   }
 
-  // status === 'lost' — stake already gone, no balance change.
+  // status === 'lost' — stake already gone, no balance change. Every leg is
+  // coloured red on the bet card.
+  await setSelectionStatusForBet(id, 'lost')
   const updated = await updateBet(id, { status, settledAt, payout: 0 })
   if (!updated) {
     return NextResponse.json({ error: 'bet not found' }, { status: 404 })
