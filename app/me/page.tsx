@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Script from 'next/script'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   ChevronRight,
   Ticket,
@@ -72,7 +72,6 @@ const MENU_ITEMS = [
 
 export default function MePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [balanceHidden, setBalanceHidden] = useState(false)
@@ -125,14 +124,16 @@ export default function MePage() {
 
   // If the page was linked with ?withdraw=1 (e.g. from the home page button),
   // auto-open the withdraw modal as soon as the profile is available.
+  // Read window.location directly so we don't need a Suspense wrapper.
   useEffect(() => {
-    if (searchParams.get('withdraw') === '1' && profile) {
+    if (typeof window === 'undefined' || !profile) return
+    if (new URLSearchParams(window.location.search).get('withdraw') === '1') {
       setWithdrawMsg(null)
       setWithdrawError(null)
       setWithdrawAmount('')
       setWithdrawOpen(true)
     }
-  }, [searchParams, profile])
+  }, [profile])
 
   const balance = profile?.balance ?? 0
   const depositHref = profile
