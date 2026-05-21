@@ -1,0 +1,26 @@
+# .NET build output
+bin/
+obj/
+out/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# NCrunch
+_NCrunch_*
+
+# JetBrains DotCover
+*.dotCover
+
+# Local secrets (use user secrets, env vars, or appsettings.Production.json)
+appsettings.Production.json
+appsettings.Local.json
+
+# Logs
+*.log
