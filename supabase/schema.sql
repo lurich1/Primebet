@@ -33,6 +33,7 @@ create table if not exists public.users (
     name                     text not null check (char_length(name) between 2 and 120),
     email                    citext not null unique,
     password_hash            text not null,
+    phone                    text,
     referred_by_code         text,
     referred_by_sub_admin_id uuid references public.sub_admins(id) on delete set null,
     first_deposit_amount     numeric(18, 2) not null default 0 check (first_deposit_amount >= 0),

@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     name?: string
     email?: string
     password?: string
+    phone?: string
     referralCode?: string
   }
   try {
@@ -22,6 +23,16 @@ export async function POST(request: Request) {
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
   const referralCode = (body.referralCode ?? '').trim().toUpperCase()
+  // Normalise phone to 10-digit local format. Optional at signup.
+  let phone = (body.phone ?? '').replace(/\s|-/g, '')
+  if (phone.startsWith('+233')) phone = '0' + phone.slice(4)
+  else if (phone.startsWith('233')) phone = '0' + phone.slice(3)
+  if (phone && !/^0\d{9}$/.test(phone)) {
+    return NextResponse.json(
+      { error: 'phone must be a 10-digit number starting with 0' },
+      { status: 400 },
+    )
+  }
 
   if (!name || !email || !password) {
     return NextResponse.json(
@@ -67,6 +78,7 @@ export async function POST(request: Request) {
     name,
     email,
     passwordHash: hashPassword(password),
+    phone: phone || undefined,
     referredByCode: validatedReferralCode,
     referredBySubAdminId,
   })

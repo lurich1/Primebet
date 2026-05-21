@@ -95,6 +95,7 @@ export interface AppUser {
   name: string
   email: string
   passwordHash: string
+  phone?: string
   referredByCode?: string
   referredBySubAdminId?: string
   firstDepositAmount: number

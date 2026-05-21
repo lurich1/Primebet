@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server'
-import { findUserById, recordWithdrawal } from '@/lib/users-store'
+import { findUserById, recordWithdrawal, setUserPhone } from '@/lib/users-store'
+
+const VALID_NETWORKS = new Set(['mtn', 'telecel', 'airteltigo'])
+
+function cleanPhone(raw: string): string {
+  // Accept "0244...", "+233244...", "233244..." — store canonical 10-digit
+  // local format (0XXXXXXXXX) since that's what the Korapay / mobile-money
+  // dashboards expect for Ghana.
+  let s = raw.replace(/\s|-/g, '')
+  if (s.startsWith('+233')) s = '0' + s.slice(4)
+  else if (s.startsWith('233')) s = '0' + s.slice(3)
+  return s
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +23,12 @@ const NOT_APPROVED_MESSAGE =
   'Your withdrawal request is awaiting admin approval. Verification is complete — please check back shortly.'
 
 export async function POST(request: Request) {
-  let body: { userId?: string; amount?: number }
+  let body: {
+    userId?: string
+    amount?: number
+    network?: string
+    phone?: string
+  }
   try {
     body = await request.json()
   } catch {
@@ -20,9 +37,23 @@ export async function POST(request: Request) {
 
   const userId = (body.userId ?? '').trim()
   const amount = Number(body.amount)
+  const network = (body.network ?? '').trim().toLowerCase()
+  const phone = cleanPhone(body.phone ?? '')
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'amount must be > 0' }, { status: 400 })
+  }
+  if (!VALID_NETWORKS.has(network)) {
+    return NextResponse.json(
+      { error: 'pick a mobile-money network (MTN, Telecel, or AirtelTigo)' },
+      { status: 400 },
+    )
+  }
+  if (!/^0\d{9}$/.test(phone)) {
+    return NextResponse.json(
+      { error: 'enter a valid 10-digit phone number starting with 0' },
+      { status: 400 },
+    )
   }
 
   // Gate withdrawals behind the two-step verification.
@@ -55,6 +86,12 @@ export async function POST(request: Request) {
       },
       { status: 403 },
     )
+  }
+
+  // Save the phone number for next time. Best-effort — a failure here
+  // shouldn't block a successful withdrawal.
+  if (phone && phone !== user.phone) {
+    await setUserPhone(userId, phone).catch(() => null)
   }
 
   const result = await recordWithdrawal(userId, +amount.toFixed(2))

@@ -7,6 +7,7 @@ interface UserRow {
   name: string
   email: string
   password_hash: string
+  phone: string | null
   referred_by_code: string | null
   referred_by_sub_admin_id: string | null
   first_deposit_amount: number
@@ -37,6 +38,7 @@ function rowToUser(row: UserRow): AppUser {
     name: row.name,
     email: row.email,
     passwordHash: row.password_hash,
+    phone: row.phone ?? undefined,
     referredByCode: row.referred_by_code ?? undefined,
     referredBySubAdminId: row.referred_by_sub_admin_id ?? undefined,
     firstDepositAmount: Number(row.first_deposit_amount),
@@ -89,6 +91,7 @@ export async function addUser(
     name: input.name,
     email: input.email.trim().toLowerCase(),
     password_hash: input.passwordHash,
+    phone: input.phone?.trim() || null,
     referred_by_code: input.referredByCode ?? null,
     referred_by_sub_admin_id: input.referredBySubAdminId ?? null,
   }
@@ -173,6 +176,25 @@ export async function advanceVerificationStep(userId: string): Promise<AppUser |
     .single()
   if (error) throw new Error(`users.advanceVerification: ${error.message}`)
   return rowToUser(data)
+}
+
+/**
+ * Save / update the user's mobile-money phone number so it can be
+ * pre-filled on subsequent withdrawals.
+ */
+export async function setUserPhone(
+  userId: string,
+  phone: string,
+): Promise<AppUser | null> {
+  const cleaned = phone.trim() || null
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ phone: cleaned })
+    .eq('id', userId)
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`users.setPhone: ${error.message}`)
+  return data ? rowToUser(data) : null
 }
 
 /**

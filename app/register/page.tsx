@@ -15,6 +15,7 @@ function RegisterForm() {
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [referralCode, setReferralCode] = useState('')
@@ -49,6 +50,7 @@ function RegisterForm() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          phone: phone.trim(),
           password,
           referralCode: referralCode.trim(),
         }),
@@ -153,6 +155,29 @@ function RegisterForm() {
                   className="h-11 bg-secondary border-border"
                   required
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="phone" className="text-sm font-medium text-foreground">
+                  Mobile money number{' '}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (for withdrawals)
+                  </span>
+                </label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="0244XXXXXXX"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="h-11 bg-secondary border-border"
+                  pattern="^(?:\+?233|0)\d{9}$"
+                  autoComplete="tel"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Optional — we'll auto-fill it when you withdraw later.
+                </p>
               </div>
 
               <div className="space-y-1.5">

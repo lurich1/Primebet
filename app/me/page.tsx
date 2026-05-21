@@ -43,6 +43,7 @@ interface UserProfile {
   id: string
   name: string
   email?: string
+  phone?: string | null
   totalDeposited: number
   totalWithdrawn: number
   balance: number
@@ -50,6 +51,14 @@ interface UserProfile {
   withdrawalApproved?: boolean
   firstDepositAt?: string | null
 }
+
+type MobileNetwork = 'mtn' | 'telecel' | 'airteltigo'
+
+const NETWORKS: { key: MobileNetwork; label: string; color: string }[] = [
+  { key: 'mtn', label: 'MTN', color: 'bg-amber-400 text-black' },
+  { key: 'telecel', label: 'Telecel', color: 'bg-red-500 text-white' },
+  { key: 'airteltigo', label: 'AirtelTigo', color: 'bg-blue-500 text-white' },
+]
 
 const VERIFICATION_AMOUNT = 200
 const VERIFICATION_MESSAGES: Record<0 | 1, string> = {
@@ -80,6 +89,8 @@ export default function MePage() {
   const [balanceHidden, setBalanceHidden] = useState(false)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawNetwork, setWithdrawNetwork] = useState<MobileNetwork>('mtn')
+  const [withdrawPhone, setWithdrawPhone] = useState('')
   const [withdrawMsg, setWithdrawMsg] = useState<string | null>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const [withdrawLoading, setWithdrawLoading] = useState(false)
@@ -150,6 +161,8 @@ export default function MePage() {
     setWithdrawMsg(null)
     setWithdrawError(null)
     setWithdrawAmount('')
+    // Pre-fill phone from saved profile so the user doesn't retype it
+    setWithdrawPhone(profile?.phone ?? '')
     setWithdrawOpen(true)
   }
 
@@ -167,12 +180,21 @@ export default function MePage() {
       setWithdrawError('Amount exceeds your balance.')
       return
     }
+    if (!/^(?:\+?233|0)\d{9}$/.test(withdrawPhone.replace(/\s|-/g, ''))) {
+      setWithdrawError('Enter a valid phone number (10 digits starting with 0).')
+      return
+    }
     setWithdrawLoading(true)
     try {
       const res = await fetch('/api/users/withdraw', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, amount: amt }),
+        body: JSON.stringify({
+          userId: profile.id,
+          amount: amt,
+          network: withdrawNetwork,
+          phone: withdrawPhone,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -607,19 +629,84 @@ export default function MePage() {
               </div>
             ) : (
             <form onSubmit={submitWithdraw} className="space-y-4">
-              <Input
-                type="number"
-                inputMode="decimal"
-                min="0.01"
-                step="0.01"
-                max={balance || undefined}
-                placeholder="Amount"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="h-12 text-lg font-bold tabular-nums"
-                disabled={withdrawLoading}
-                required
-              />
+              {/* Network selector */}
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2">
+                  Mobile money network
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {NETWORKS.map((n) => {
+                    const active = withdrawNetwork === n.key
+                    return (
+                      <button
+                        type="button"
+                        key={n.key}
+                        onClick={() => setWithdrawNetwork(n.key)}
+                        disabled={withdrawLoading}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                          active
+                            ? `${n.color} ring-2 ring-primary scale-[1.02]`
+                            : 'bg-secondary text-foreground hover:bg-secondary/80'
+                        }`}
+                      >
+                        {n.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Phone number — pre-filled from profile */}
+              <div>
+                <label
+                  htmlFor="withdraw-phone"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
+                >
+                  Phone number
+                </label>
+                <Input
+                  id="withdraw-phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="0244XXXXXXX"
+                  value={withdrawPhone}
+                  onChange={(e) => setWithdrawPhone(e.target.value)}
+                  className="h-11 tabular-nums"
+                  disabled={withdrawLoading}
+                  autoComplete="tel"
+                  required
+                />
+                {profile.phone && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Saved from your account. Edit if it's changed.
+                  </p>
+                )}
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label
+                  htmlFor="withdraw-amount"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
+                >
+                  Amount (GHS)
+                </label>
+                <Input
+                  id="withdraw-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  max={balance || undefined}
+                  placeholder="Amount"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="h-12 text-lg font-bold tabular-nums"
+                  disabled={withdrawLoading}
+                  required
+                />
+              </div>
+
               {withdrawError && (
                 <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
                   {withdrawError}

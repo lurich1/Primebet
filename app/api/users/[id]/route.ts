@@ -23,6 +23,7 @@ export async function GET(
     balance,
     verificationStep: user.verificationStep ?? 0,
     withdrawalApproved: user.withdrawalApproved ?? false,
+    phone: user.phone ?? null,
     firstDepositAt: user.firstDepositAt ?? null,
   })
 }
