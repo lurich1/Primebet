@@ -103,6 +103,7 @@ export interface AppUser {
   totalWithdrawn?: number
   balance?: number
   verificationStep?: 0 | 1 | 2
+  withdrawalApproved?: boolean
   createdAt: string
 }
 

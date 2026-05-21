@@ -43,6 +43,8 @@ create table if not exists public.users (
     -- 2-step withdrawal verification: 0 = none, 1 = first 200 paid, 2 = fully verified
     verification_step        integer not null default 0
                              check (verification_step between 0 and 2),
+    -- Admin must explicitly flip this before withdrawals are allowed
+    withdrawal_approved      boolean not null default false,
     created_at               timestamptz not null default now()
 );
 

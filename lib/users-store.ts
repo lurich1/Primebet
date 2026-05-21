@@ -15,6 +15,7 @@ interface UserRow {
   total_withdrawn: number
   balance: number
   verification_step: number
+  withdrawal_approved: boolean
   created_at: string
 }
 
@@ -44,6 +45,7 @@ function rowToUser(row: UserRow): AppUser {
     totalWithdrawn: Number(row.total_withdrawn),
     balance: Number(row.balance),
     verificationStep: clamped,
+    withdrawalApproved: row.withdrawal_approved ?? false,
     createdAt: row.created_at,
   }
 }
@@ -171,6 +173,36 @@ export async function advanceVerificationStep(userId: string): Promise<AppUser |
     .single()
   if (error) throw new Error(`users.advanceVerification: ${error.message}`)
   return rowToUser(data)
+}
+
+/**
+ * Admin gate for withdrawals — set/unset the per-user approval flag.
+ */
+export async function setWithdrawalApproval(
+  userId: string,
+  approved: boolean,
+): Promise<AppUser | null> {
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ withdrawal_approved: approved })
+    .eq('id', userId)
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`users.setWithdrawalApproval: ${error.message}`)
+  return data ? rowToUser(data) : null
+}
+
+/**
+ * List users with their current withdrawal-eligibility state — used by
+ * the admin Pending Withdrawals page.
+ */
+export async function listUsersForAdmin(): Promise<AppUser[]> {
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`users.listForAdmin: ${error.message}`)
+  return (data ?? []).map(rowToUser)
 }
 
 /**

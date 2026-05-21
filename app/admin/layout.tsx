@@ -9,6 +9,7 @@ import {
   Trophy,
   PlusSquare,
   Users,
+  UserCheck,
   Settings,
   LogOut,
   Menu,
@@ -21,6 +22,7 @@ const NAV = [
   { href: '/admin/bets', label: 'Bets', icon: Receipt },
   { href: '/admin/matches', label: 'Matches', icon: Trophy },
   { href: '/admin/custom-matches', label: 'Custom games', icon: PlusSquare },
+  { href: '/admin/users', label: 'Withdrawals', icon: UserCheck },
   { href: '/admin/sub-admins', label: 'Partners', icon: Users },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
