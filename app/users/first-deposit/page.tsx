@@ -1,13 +1,19 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import Script from 'next/script'
 import { Loader2, ArrowLeft, Wallet, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
+
+const KORAPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_KORAPAY_PUBLIC_KEY ?? ''
+const MIN_FIRST_DEPOSIT = 200
+const KORAPAY_SDK_SRC =
+  'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js'
 
 interface UserProfile {
   id: string
@@ -30,11 +36,31 @@ interface DepositResponse {
     balance: number
   }
   isFirstDeposit: boolean
-  commission: {
-    commission: number
-    rate: number
-    subAdmin?: { id: string; name: string; referralCode: string }
-  } | null
+}
+
+interface KorapaySuccess {
+  reference: string
+  amount?: number
+  status?: string
+}
+
+declare global {
+  interface Window {
+    Korapay?: {
+      initialize: (config: {
+        key: string
+        reference: string
+        amount: number
+        currency: string
+        customer: { name: string; email: string }
+        notification_url?: string
+        onClose?: () => void
+        onSuccess?: (data: KorapaySuccess) => void
+        onFailed?: (data: { reason?: string }) => void
+      }) => void
+      close?: () => void
+    }
+  }
 }
 
 function DepositForm() {
@@ -42,12 +68,13 @@ function DepositForm() {
   const params = useSearchParams()
   const userId = params.get('userId') ?? ''
 
-  const [amount, setAmount] = useState('50')
+  const [amount, setAmount] = useState('200')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<DepositResponse | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
+  const [sdkReady, setSdkReady] = useState(false)
 
   useEffect(() => {
     if (!userId) {
@@ -74,8 +101,24 @@ function DepositForm() {
 
   const isReturning = Boolean(profile?.firstDepositAt)
   const headingTitle = isReturning ? 'Add funds to your wallet' : 'Make your first deposit'
+  const minAmount = isReturning ? 1 : MIN_FIRST_DEPOSIT
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const creditOnServer = useCallback(
+    async (reference: string, amt: number) => {
+      const res = await fetch('/api/users/deposit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId, amount: amt, reference }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      saveUserSession(userId)
+      setResult(data as DepositResponse)
+    },
+    [userId],
+  )
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     if (!userId) {
@@ -87,26 +130,62 @@ function DepositForm() {
       setError('Enter a positive amount.')
       return
     }
-    setLoading(true)
-    try {
-      const res = await fetch('/api/users/deposit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId, amount: amt }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-      saveUserSession(userId)
-      setResult(data as DepositResponse)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
+    if (amt < minAmount) {
+      setError(`Minimum deposit is GHS ${minAmount.toFixed(2)}.`)
+      return
     }
+    if (!profile) {
+      setError('Profile not loaded yet — wait a moment and try again.')
+      return
+    }
+    if (!KORAPAY_PUBLIC_KEY) {
+      setError('Payment not configured (missing NEXT_PUBLIC_KORAPAY_PUBLIC_KEY).')
+      return
+    }
+    if (!window.Korapay) {
+      setError('Payment library still loading — try again in a second.')
+      return
+    }
+
+    setLoading(true)
+    const reference = `PB-${profile.id.slice(0, 8)}-${Date.now()}`
+
+    window.Korapay.initialize({
+      key: KORAPAY_PUBLIC_KEY,
+      reference,
+      amount: amt,
+      currency: 'GHS',
+      customer: {
+        name: profile.name || 'Player',
+        email: profile.email || `${profile.id}@primebet.local`,
+      },
+      onClose: () => {
+        setLoading(false)
+      },
+      onSuccess: async (data) => {
+        try {
+          await creditOnServer(data.reference || reference, amt)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        } finally {
+          setLoading(false)
+        }
+      },
+      onFailed: (data) => {
+        setError(data?.reason ?? 'Payment failed.')
+        setLoading(false)
+      },
+    })
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Script
+        src={KORAPAY_SDK_SRC}
+        strategy="afterInteractive"
+        onLoad={() => setSdkReady(true)}
+      />
+
       <header className="bg-card border-b border-border">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
           <Link
@@ -129,9 +208,9 @@ function DepositForm() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-4">
+      <main className="flex-1 flex items-start sm:items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-card rounded-2xl border border-border p-6 sm:p-8">
+          <div className="bg-card rounded-2xl border border-border p-5 sm:p-8">
             {result ? (
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-success/15 flex items-center justify-center">
@@ -139,19 +218,14 @@ function DepositForm() {
                 </div>
                 <h1 className="text-2xl font-bold">Deposit successful</h1>
                 <div className="bg-secondary rounded-lg p-4 text-left space-y-2">
-                  <Row label="Amount" value={result.user.firstDepositAmount.toFixed(2)} bold />
-                  {result.commission && (
-                    <Row
-                      label="Partner commission"
-                      value={`${result.commission.commission.toFixed(2)} (${Math.round(
-                        result.commission.rate * 100,
-                      )}%)`}
-                      tone="good"
-                    />
-                  )}
+                  <Row
+                    label="Amount"
+                    value={`GHS ${(result.user.firstDepositAmount || Number(amount)).toFixed(2)}`}
+                    bold
+                  />
                   <Row
                     label="Total deposited"
-                    value={result.user.totalDeposited.toFixed(2)}
+                    value={`GHS ${result.user.totalDeposited.toFixed(2)}`}
                   />
                   <Row
                     label="New balance"
@@ -159,25 +233,6 @@ function DepositForm() {
                     tone="good"
                   />
                 </div>
-
-                {result.commission?.subAdmin && (
-                  <p className="text-xs text-muted-foreground">
-                    Your partner{' '}
-                    <span className="font-semibold text-foreground">
-                      {result.commission.subAdmin.name}
-                    </span>{' '}
-                    just earned{' '}
-                    <span className="font-bold text-success">
-                      {result.commission.commission.toFixed(2)}
-                    </span>{' '}
-                    via code{' '}
-                    <span className="font-mono tracking-wider text-primary">
-                      {result.commission.subAdmin.referralCode}
-                    </span>
-                    .
-                  </p>
-                )}
-
                 <Button
                   onClick={() => router.push('/me')}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
@@ -222,20 +277,22 @@ function DepositForm() {
                   </div>
                   <h1 className="text-2xl font-bold text-foreground">{headingTitle}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Demo only — no real payment is processed.
+                    {isReturning
+                      ? 'Pay securely with Korapay.'
+                      : `Pay securely with Korapay. Minimum first deposit: GHS ${MIN_FIRST_DEPOSIT}.`}
                   </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
-                      Amount
+                      Amount (GHS)
                     </label>
                     <Input
                       type="number"
                       inputMode="decimal"
                       step="0.01"
-                      min="1"
+                      min={minAmount}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       className="text-2xl h-14 bg-secondary border-border font-bold tabular-nums"
@@ -243,21 +300,23 @@ function DepositForm() {
                     />
                   </div>
 
-                  <div className="flex gap-2">
-                    {['10', '50', '100', '500'].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setAmount(preset)}
-                        className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-                          amount === preset
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                  <div className="flex gap-2 flex-wrap">
+                    {(isReturning ? ['50', '100', '200', '500'] : ['200', '300', '500', '1000']).map(
+                      (preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setAmount(preset)}
+                          className={`flex-1 min-w-[60px] py-2 rounded-md text-sm font-medium transition-colors ${
+                            amount === preset
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-secondary text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ),
+                    )}
                   </div>
 
                   {error && (
@@ -268,21 +327,26 @@ function DepositForm() {
 
                   <Button
                     type="submit"
-                    disabled={loading}
-                    className="w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={loading || !sdkReady || !profile}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing…
+                      </>
+                    ) : !sdkReady ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Loading payment…
                       </>
                     ) : (
-                      'Deposit'
+                      `Pay GHS ${Number(amount || 0).toFixed(2)}`
                     )}
                   </Button>
 
-                  <p className="text-center text-xs text-muted-foreground">
-                    You can deposit later from your account. Click "Skip" up top to head
-                    home.
+                  <p className="text-center text-[11px] text-muted-foreground">
+                    Secured by Korapay · You can deposit later from your account
                   </p>
                 </form>
               </>
@@ -306,10 +370,10 @@ function Row({
   bold?: boolean
 }) {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex justify-between items-center gap-2">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span
-        className={`tabular-nums ${bold ? 'text-lg font-bold' : 'text-sm font-semibold'} ${
+        className={`tabular-nums text-right ${bold ? 'text-lg font-bold' : 'text-sm font-semibold'} ${
           tone === 'good' ? 'text-success' : 'text-foreground'
         }`}
       >
