@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { ArrowLeft, Home, Headphones, X, Sparkles, Check, Trophy } from 'lucide-react'
+import { ArrowLeft, Home, Headphones, X, Sparkles, Check, Trophy, Share2 } from 'lucide-react'
 import type { PlacedBet } from '@/lib/types'
 import { hydrateLegacySelection } from '@/lib/bet-slip-utils'
 import { getCountryFlag } from '@/lib/country-flags'
 import { Button } from '@/components/ui/button'
+
+const formatMoney = (n: number) =>
+  n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 interface BetTicketDetailsProps {
   bet: PlacedBet
@@ -59,30 +62,38 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
           type="button"
           onClick={() => setShowTrophy(false)}
           aria-label="Tap to view ticket"
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background animate-in fade-in duration-300"
+          className="absolute inset-0 z-10 flex flex-col items-center bg-background px-6 pt-8 sm:pt-12 animate-in fade-in duration-300"
         >
-          <div className="relative w-64 h-64 sm:w-80 sm:h-80">
+          {/* Money + headline AT TOP */}
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            You won big
+          </p>
+          <p className="mt-2 text-4xl sm:text-5xl font-extrabold text-success tabular-nums">
+            GHS {formatMoney(totalReturn)}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            Congratulations{userName ? `, ${userName}` : ''}!
+          </p>
+
+          {/* Trophy below */}
+          <div className="relative w-56 h-56 sm:w-72 sm:h-72 mt-6 sm:mt-8">
             <Image
-              src="/won trophy image.jpg"
+              src="/won_trophy_image.jpg"
               alt="Trophy"
               fill
               priority
               className="object-contain"
             />
           </div>
-          <p className="mt-6 text-xs uppercase tracking-widest text-muted-foreground">
-            Congratulations
+
+          <p className="mt-auto pb-8 text-[11px] text-muted-foreground">
+            Tap to view ticket
           </p>
-          <p className="mt-1 text-3xl sm:text-4xl font-extrabold text-success tabular-nums">
-            GHS {totalReturn.toFixed(2)}
-          </p>
-          <p className="mt-2 text-sm text-foreground">You won!</p>
-          <p className="mt-6 text-[11px] text-muted-foreground">Tap to view ticket</p>
         </button>
       )}
 
-      {/* ─── Red app header ─── */}
-      <header className="bg-destructive text-destructive-foreground">
+      {/* ─── Green app header (brand) ─── */}
+      <header className="bg-primary text-primary-foreground">
         <div className="max-w-md mx-auto w-full px-4 h-14 flex items-center justify-between gap-3">
           <button
             type="button"
@@ -133,36 +144,31 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                 won ? 'text-success' : 'text-white'
               }`}
             >
-              {won
-                ? totalReturn.toLocaleString('en-GB', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                : '0.00'}
+              {won ? formatMoney(totalReturn) : '0.00'}
             </p>
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3 space-y-1 text-sm">
-            <SummaryRow label="Total Stake" value={bet.stake.toFixed(2)} />
+            <SummaryRow label="Total Stake" value={formatMoney(bet.stake)} />
             <SummaryRow label="Total Odds" value={bet.totalOdds.toFixed(2)} />
             {won && (
               <SummaryRow
                 label="Potential Win"
-                value={bet.potentialWin.toFixed(2)}
+                value={formatMoney(bet.potentialWin)}
               />
             )}
           </div>
 
           {/* Banner: congrats for won, remix for lost */}
           {won ? (
-            <div className="mt-4 -mx-4 px-4 py-3 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/15 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="mt-3 -mx-4 px-4 py-2.5 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/15 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">
+                  <p className="text-xs font-bold truncate">
                     Congratulations{userName ? `, "${userName}"` : ''}!
                   </p>
-                  <p className="text-xs text-white/70">You are amazing!</p>
+                  <p className="text-[11px] text-white/70">You are amazing!</p>
                 </div>
               </div>
               <button
@@ -170,20 +176,21 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                 onClick={() => {
                   void navigator.share?.({
                     title: 'Prime Bet — Won!',
-                    text: `Just won GHS ${totalReturn.toFixed(2)} on Prime Bet (ticket ${ticketId})`,
+                    text: `Just won GHS ${formatMoney(totalReturn)} on Prime Bet (ticket ${ticketId})`,
                   })
                 }}
-                className="px-3 py-2 rounded-md bg-amber-400 hover:bg-amber-500 text-black font-bold text-sm shrink-0"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-black font-bold text-[11px] shrink-0"
               >
+                <Share2 className="w-3 h-3" />
                 Show Off
               </button>
             </div>
           ) : lost ? (
-            <div className="mt-4 -mx-4 px-4 py-3 bg-white/5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-2xl shrink-0">🤖</span>
+            <div className="mt-3 -mx-4 px-4 py-2.5 bg-white/5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-xl shrink-0">🤖</span>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">
+                  <p className="text-xs font-bold truncate">
                     Bounce back fast — remix and retry your bet!
                   </p>
                 </div>
@@ -191,9 +198,9 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shrink-0"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] shrink-0"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3 h-3" />
                 Remix Bet
               </button>
             </div>
@@ -288,13 +295,20 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
             )
           })}
 
-          <div className="px-4 py-4 flex items-center justify-between text-sm text-foreground">
+          <div className="px-4 py-3 flex items-center justify-between text-xs text-muted-foreground">
             <span>Number of Bets: 1</span>
-            <span className="text-primary font-semibold cursor-pointer">Bet Details ›</span>
+            <span className="text-primary font-semibold cursor-pointer">
+              Bet Details ›
+            </span>
           </div>
 
-          <div className="px-4 py-3 border-t border-border">
-            <Button variant="outline" className="w-full" onClick={onClose}>
+          <div className="px-4 py-2.5 border-t border-border">
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-xs h-8"
+              onClick={onClose}
+            >
               Close
             </Button>
           </div>

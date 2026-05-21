@@ -335,7 +335,9 @@ export default function MePage() {
             </button>
           </div>
           <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mb-4 truncate">
-            {balanceHidden ? '••••••' : `GHS ${balance.toFixed(2)}`}
+            {balanceHidden
+              ? '••••••'
+              : `GHS ${balance.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </p>
 
           <div className="flex gap-2">
