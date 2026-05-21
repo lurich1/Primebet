@@ -88,7 +88,9 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
               <span className="font-medium text-sm truncate">{match.homeTeam}</span>
             </div>
             {match.isLive && (
-              <span className="text-base font-bold shrink-0 tabular-nums">{match.homeScore}</span>
+              <span className="text-base font-bold shrink-0 tabular-nums">
+                {match.homeScore ?? '-'}
+              </span>
             )}
           </div>
 
@@ -100,7 +102,9 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
               <span className="font-medium text-sm truncate">{match.awayTeam}</span>
             </div>
             {match.isLive && (
-              <span className="text-base font-bold shrink-0 tabular-nums">{match.awayScore}</span>
+              <span className="text-base font-bold shrink-0 tabular-nums">
+                {match.awayScore ?? '-'}
+              </span>
             )}
           </div>
         </div>

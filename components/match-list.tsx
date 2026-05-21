@@ -195,7 +195,9 @@ function MatchRow({
               {match.homeTeam}
             </span>
             {match.isLive && (
-              <span className="font-bold text-foreground shrink-0">{match.homeScore}</span>
+              <span className="font-bold text-foreground shrink-0 tabular-nums">
+                {match.homeScore ?? '-'}
+              </span>
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -203,7 +205,9 @@ function MatchRow({
               {match.awayTeam}
             </span>
             {match.isLive && (
-              <span className="font-bold text-foreground shrink-0">{match.awayScore}</span>
+              <span className="font-bold text-foreground shrink-0 tabular-nums">
+                {match.awayScore ?? '-'}
+              </span>
             )}
           </div>
         </Link>

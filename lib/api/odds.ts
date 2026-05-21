@@ -296,6 +296,51 @@ function toMatch(event: OddsApiEvent, sport: string): Match {
 const SOCCER_MARKETS = 'h2h,totals,btts,double_chance'
 const DEFAULT_MARKETS = 'h2h,totals'
 
+interface OddsApiScoreEntry {
+  name: string
+  score: string
+}
+interface OddsApiScore {
+  id: string
+  sport_key: string
+  completed: boolean
+  scores: OddsApiScoreEntry[] | null
+}
+
+/** Map of event-id → { home, away } parsed scores. */
+type ScoreMap = Map<string, { home: number; away: number }>
+
+async function fetchScoresForSport(
+  sportKey: string,
+  apiKey: string,
+): Promise<ScoreMap> {
+  const map: ScoreMap = new Map()
+  try {
+    // daysFrom=1 returns live + recently completed events in the last 24h.
+    const url = `${ODDS_API_BASE}/sports/${sportKey}/scores/?apiKey=${apiKey}&daysFrom=1`
+    const res = await fetch(url, { next: { revalidate: 30 } })
+    if (!res.ok) return map
+    const items = (await res.json()) as OddsApiScore[]
+    for (const item of items) {
+      if (!item.scores || item.scores.length < 2) continue
+      // Match scores to home/away by the team name attached to each entry.
+      // We don't know which entry is home up front, so we keep both.
+      let home: number | null = null
+      let away: number | null = null
+      // The /scores endpoint doesn't directly tag home vs away, but the order
+      // matches the upstream event order (home first, away second).
+      const first = Number(item.scores[0]?.score)
+      const second = Number(item.scores[1]?.score)
+      if (Number.isFinite(first)) home = first
+      if (Number.isFinite(second)) away = second
+      if (home !== null && away !== null) map.set(item.id, { home, away })
+    }
+  } catch {
+    // ignore — scores are best-effort, the odds list still renders
+  }
+  return map
+}
+
 async function fetchSport(sportKey: string, apiKey: string): Promise<OddsApiEvent[]> {
   const markets = sportKey.startsWith('soccer_') ? SOCCER_MARKETS : DEFAULT_MARKETS
   const url = `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=eu&markets=${markets}&oddsFormat=decimal`
@@ -327,10 +372,31 @@ export async function getMatchesForSport(sport: string): Promise<Match[]> {
   const keys = SPORT_KEYS[sport] ?? []
   if (keys.length === 0) return []
 
-  const results = await Promise.allSettled(keys.map((k) => fetchSport(k, apiKey)))
-  const events = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  // Fetch odds and live scores for every sport key in parallel. Scores are
+  // best-effort: if the /scores endpoint fails we just don't attach them.
+  const [oddsResults, scoreResults] = await Promise.all([
+    Promise.allSettled(keys.map((k) => fetchSport(k, apiKey))),
+    Promise.allSettled(keys.map((k) => fetchScoresForSport(k, apiKey))),
+  ])
+
+  // Merge all per-sport-key score maps into one big eventId → score lookup.
+  const allScores: ScoreMap = new Map()
+  for (const r of scoreResults) {
+    if (r.status !== 'fulfilled') continue
+    for (const [id, sc] of r.value) allScores.set(id, sc)
+  }
+
+  const events = oddsResults.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
   return events
-    .map((e) => toMatch(e, sport))
+    .map((e) => {
+      const m = toMatch(e, sport)
+      const score = allScores.get(e.id)
+      if (score) {
+        m.homeScore = score.home
+        m.awayScore = score.away
+      }
+      return m
+    })
     .filter((m) => m.odds.home > 0 && m.odds.away > 0)
     .sort((a, b) => {
       if (a.isLive !== b.isLive) return a.isLive ? -1 : 1
