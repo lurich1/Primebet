@@ -130,6 +130,36 @@ export default function AdminCustomMatchesPage() {
     }
   }
 
+  /**
+   * PATCH a match with a partial body. Used by the inline score editor and
+   * the Live/Final toggle on each existing match row.
+   */
+  const handlePatch = async (id: string, patch: Partial<Match>) => {
+    setError(null)
+    setBusy((p) => new Set(p).add(id))
+    try {
+      const res = await fetch(`/api/admin/custom-matches/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setMatches((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...(data.match as Match) } : m)),
+      )
+      setOkMsg('Match updated.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy((p) => {
+        const n = new Set(p)
+        n.delete(id)
+        return n
+      })
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <div>
@@ -358,59 +388,13 @@ export default function AdminCustomMatchesPage() {
         ) : (
           <ul className="divide-y divide-border">
             {matches.map((m) => (
-              <li
+              <ExistingMatchRow
                 key={m.id}
-                className="px-4 py-3 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <span className="uppercase tracking-wider">{m.sport ?? 'football'}</span>
-                    <span>·</span>
-                    <span className="truncate">{m.league}</span>
-                    {m.country && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{m.country}</span>
-                      </>
-                    )}
-                  </div>
-                  <p className="font-medium text-sm truncate">
-                    {m.homeTeam} vs {m.awayTeam}
-                  </p>
-                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1">
-                    {m.isLive ? (
-                      <span className="text-live font-semibold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
-                        LIVE {m.minute} · {m.homeScore}-{m.awayScore}
-                      </span>
-                    ) : (
-                      <span>{m.startTime || 'No start time'}</span>
-                    )}
-                    <span className="tabular-nums">
-                      1: <b className="text-foreground">{m.odds.home.toFixed(2)}</b>
-                      {m.odds.draw > 0 && (
-                        <>
-                          {' · '}X: <b className="text-foreground">{m.odds.draw.toFixed(2)}</b>
-                        </>
-                      )}
-                      {' · '}2: <b className="text-foreground">{m.odds.away.toFixed(2)}</b>
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(m.id)}
-                  disabled={busy.has(m.id)}
-                  className="text-destructive hover:bg-destructive/10 h-8 px-2 shrink-0"
-                >
-                  {busy.has(m.id) ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3 h-3" />
-                  )}
-                </Button>
-              </li>
+                match={m}
+                busy={busy.has(m.id)}
+                onDelete={() => handleDelete(m.id)}
+                onPatch={(patch) => handlePatch(m.id, patch)}
+              />
             ))}
           </ul>
         )}
@@ -424,5 +408,190 @@ function Label({ children }: { children: React.ReactNode }) {
     <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
       {children}
     </label>
+  )
+}
+
+interface ExistingMatchRowProps {
+  match: Match
+  busy: boolean
+  onDelete: () => void
+  onPatch: (patch: Partial<Match>) => void
+}
+
+/**
+ * One row in the existing-matches list. Lets the admin enter a live score,
+ * toggle Live/Final state, and mark the result without opening a modal.
+ */
+function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowProps) {
+  const [editing, setEditing] = useState(false)
+  const [home, setHome] = useState(String(match.homeScore ?? 0))
+  const [away, setAway] = useState(String(match.awayScore ?? 0))
+  const [minute, setMinute] = useState(match.minute ?? "1'")
+
+  const startEdit = () => {
+    setHome(String(match.homeScore ?? 0))
+    setAway(String(match.awayScore ?? 0))
+    setMinute(match.minute ?? "1'")
+    setEditing(true)
+  }
+
+  const saveLiveScore = () => {
+    onPatch({
+      isLive: true,
+      homeScore: Number(home) || 0,
+      awayScore: Number(away) || 0,
+      minute,
+    })
+    setEditing(false)
+  }
+
+  const finalizeResult = () => {
+    onPatch({
+      isLive: false,
+      homeScore: Number(home) || 0,
+      awayScore: Number(away) || 0,
+      minute: 'FT',
+    })
+    setEditing(false)
+  }
+
+  return (
+    <li className="px-4 py-3 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <span className="uppercase tracking-wider">{match.sport ?? 'football'}</span>
+            <span>·</span>
+            <span className="truncate">{match.league}</span>
+            {match.country && (
+              <>
+                <span>·</span>
+                <span className="truncate">{match.country}</span>
+              </>
+            )}
+          </div>
+          <p className="font-medium text-sm truncate">
+            {match.homeTeam} vs {match.awayTeam}
+          </p>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
+            {match.isLive ? (
+              <span className="text-live font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
+                LIVE {match.minute} · {match.homeScore ?? 0}-{match.awayScore ?? 0}
+              </span>
+            ) : match.minute === 'FT' ||
+              match.homeScore !== undefined ||
+              match.awayScore !== undefined ? (
+              <span className="font-semibold text-foreground">
+                FT · {match.homeScore ?? 0}-{match.awayScore ?? 0}
+              </span>
+            ) : (
+              <span>{match.startTime || 'No start time'}</span>
+            )}
+            <span className="tabular-nums">
+              1: <b className="text-foreground">{match.odds.home.toFixed(2)}</b>
+              {match.odds.draw > 0 && (
+                <>
+                  {' · '}X: <b className="text-foreground">{match.odds.draw.toFixed(2)}</b>
+                </>
+              )}
+              {' · '}2: <b className="text-foreground">{match.odds.away.toFixed(2)}</b>
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!editing && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={startEdit}
+              disabled={busy}
+              className="h-8 text-xs"
+            >
+              Set result
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            disabled={busy}
+            className="text-destructive hover:bg-destructive/10 h-8 px-2"
+          >
+            {busy ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Trash2 className="w-3 h-3" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="bg-secondary/40 border border-border rounded-lg p-3 space-y-2.5">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label>{match.homeTeam}</Label>
+              <Input
+                type="number"
+                min="0"
+                value={home}
+                onChange={(e) => setHome(e.target.value)}
+                className="h-9 text-center text-base font-bold tabular-nums"
+                disabled={busy}
+              />
+            </div>
+            <div>
+              <Label>{match.awayTeam}</Label>
+              <Input
+                type="number"
+                min="0"
+                value={away}
+                onChange={(e) => setAway(e.target.value)}
+                className="h-9 text-center text-base font-bold tabular-nums"
+                disabled={busy}
+              />
+            </div>
+            <div>
+              <Label>Minute</Label>
+              <Input
+                value={minute}
+                onChange={(e) => setMinute(e.target.value)}
+                className="h-9 text-center"
+                placeholder="45'"
+                disabled={busy}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditing(false)}
+              disabled={busy}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveLiveScore}
+              disabled={busy}
+              className="h-8 text-xs bg-live/20 text-live hover:bg-live/30 border border-live/30"
+            >
+              Save live score
+            </Button>
+            <Button
+              size="sm"
+              onClick={finalizeResult}
+              disabled={busy}
+              className="h-8 text-xs bg-primary text-primary-foreground"
+            >
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Final result'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
   )
 }

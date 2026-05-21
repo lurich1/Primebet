@@ -30,10 +30,11 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
     if (open) setShowTrophy(bet.status === 'won')
   }, [open, bet.id, bet.status])
 
-  // Auto-fade the trophy after 4 seconds so the player still sees the ticket.
+  // Auto-fade the trophy after 2 minutes so the celebration sticks around.
+  // Player can also tap anywhere to dismiss it sooner.
   useEffect(() => {
     if (!open || !showTrophy) return
-    const t = setTimeout(() => setShowTrophy(false), 4000)
+    const t = setTimeout(() => setShowTrophy(false), 120_000)
     return () => clearTimeout(t)
   }, [open, showTrophy])
 
@@ -55,7 +56,13 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
   const ticketId = bet.code
 
   return (
-    <div className="fixed inset-0 z-[80] bg-background flex flex-col">
+    <div
+      className="fixed inset-0 z-[80] bg-background flex flex-col"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
       {/* ─── Trophy celebration splash (won only) ─── */}
       {won && showTrophy && (
         <button

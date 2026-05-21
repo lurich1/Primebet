@@ -124,5 +124,14 @@ export function useBets(options: UseBetsOptions = {}) {
     void refresh()
   }, [refresh])
 
+  // Poll every 30s so the player notices when admin settles their bet.
+  // Admin uses scope:'admin' and likely doesn't need the live polling,
+  // so we skip it for that caller.
+  useEffect(() => {
+    if (options.scope === 'admin') return
+    const t = setInterval(() => void refresh(), 30_000)
+    return () => clearInterval(t)
+  }, [options.scope, refresh])
+
   return { bets, loading, error, refresh, placeBet, settleBet, removeBet, lookupCode }
 }

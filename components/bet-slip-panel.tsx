@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   X,
   Trash2,
@@ -46,8 +46,26 @@ export function BetSlipPanel({
   const [bookingCode, setBookingCode] = useState('')
   const [loadingCode, setLoadingCode] = useState(false)
   const [statusMsg, setStatusMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  // Trophy auto-pop: track which bet ids are currently pending so we can
+  // detect when one flips to "won" between polls. We also remember which
+  // bets we've already celebrated so reloads don't trigger the splash twice.
+  const seenWonRef = useRef<Set<string>>(new Set())
+  const pendingIdsRef = useRef<Set<string>>(new Set())
+  const [celebrationBet, setCelebrationBet] = useState<PlacedBet | null>(null)
 
   const { bets, placeBet, settleBet, removeBet, lookupCode, loading, error } = useBets()
+
+  // Watch for a pending → won transition and pop the trophy.
+  useEffect(() => {
+    for (const b of bets) {
+      const wasPending = pendingIdsRef.current.has(b.id)
+      if (b.status === 'won' && wasPending && !seenWonRef.current.has(b.id)) {
+        seenWonRef.current.add(b.id)
+        setCelebrationBet(b)
+      }
+    }
+    pendingIdsRef.current = new Set(bets.filter((b) => b.status === 'pending').map((b) => b.id))
+  }, [bets])
 
   const openBets = useMemo(() => bets.filter((b) => b.status === 'pending'), [bets])
   const settledBets = useMemo(() => bets.filter((b) => b.status !== 'pending'), [bets])
@@ -121,6 +139,15 @@ export function BetSlipPanel({
 
   return (
     <div className="p-4">
+      {/* Auto-pop the trophy whenever a bet flips pending → won. */}
+      {celebrationBet && (
+        <BetTicketDetails
+          bet={celebrationBet}
+          open={true}
+          onClose={() => setCelebrationBet(null)}
+        />
+      )}
+
       <div className="flex border-b border-border text-sm">
         <TabButton active={tab === 'slip'} onClick={() => setTab('slip')}>
           Bet Slip{selections.length > 0 ? ` (${selections.length})` : ''}
