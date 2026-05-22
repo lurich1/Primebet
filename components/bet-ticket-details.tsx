@@ -21,7 +21,7 @@ interface BetTicketDetailsProps {
  * Sportybet-style ticket details view. Won tickets show a larger trophy
  * embedded on the ticket itself — no splash overlay.
  */
-export function BetTicketDetails({ bet, open, onClose, userName: _userName }: BetTicketDetailsProps) {
+export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDetailsProps) {
   if (!open) return null
 
   const settled = bet.status !== 'pending'
