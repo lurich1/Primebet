@@ -259,11 +259,43 @@ function apiPartialMarkets(event: OddsApiEvent): Partial<MarketBook> {
   return partial
 }
 
+/**
+ * Map real wall-clock elapsed minutes since kick-off to a football match clock.
+ *
+ *   real 0–44   → "0'"…"44'"  (1st half)
+ *   real 45–59  → "HT"        (15-minute halftime break)
+ *   real 60–104 → "46'"…"90'" (2nd half resumes from 46')
+ *   real ≥ 105  → "FT"        (full time — match hidden from feed)
+ *
+ * No stoppage time — the provider doesn't expose it. Mirrors the regime used
+ * by tickingMinute() in lib/custom-matches-store.ts so API and custom matches
+ * behave consistently from a punter's perspective.
+ */
+function footballMatchClock(elapsedMin: number): { minute: string; finished: boolean } {
+  if (elapsedMin < 45) return { minute: `${elapsedMin}'`, finished: false }
+  if (elapsedMin < 60) return { minute: 'HT', finished: false }
+  if (elapsedMin < 105) return { minute: `${elapsedMin - 14}'`, finished: false }
+  return { minute: 'FT', finished: true }
+}
+
 function toMatch(event: OddsApiEvent, sport: string): Match {
   const odds = averageH2H(event)
   const start = new Date(event.commence_time)
   const now = new Date()
-  const isLive = start.getTime() < now.getTime()
+  const elapsedMin = Math.floor((now.getTime() - start.getTime()) / 60000)
+  const started = elapsedMin >= 0
+
+  let minute: string | undefined
+  let isLive = started
+  if (started) {
+    if (sport === 'football') {
+      const clock = footballMatchClock(elapsedMin)
+      minute = clock.minute
+      if (clock.finished) isLive = false
+    } else {
+      minute = `${elapsedMin}'`
+    }
+  }
 
   const base: Match = {
     id: event.id,
@@ -276,7 +308,7 @@ function toMatch(event: OddsApiEvent, sport: string): Match {
       ? undefined
       : start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     startTimeISO: event.commence_time,
-    minute: isLive ? `${Math.floor((now.getTime() - start.getTime()) / 60000)}'` : undefined,
+    minute,
     odds,
     sport,
   }

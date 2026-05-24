@@ -85,10 +85,12 @@ export async function GET(request: Request) {
 
   try {
     const apiMatches = await getMatchesForSport(sport)
+    // Same FT filter we apply to custom matches: hide finished API matches.
+    const liveOrUpcomingApi = apiMatches.filter((m) => m.minute !== 'FT')
     return NextResponse.json({
       source: customMatches.length > 0 ? 'mixed' : 'odds-api',
       reason: apiMatches.length === 0 ? 'no upcoming events from provider' : undefined,
-      matches: maybeFilter([...customMatches, ...hydrateAll(apiMatches, overrides)]),
+      matches: maybeFilter([...customMatches, ...hydrateAll(liveOrUpcomingApi, overrides)]),
       customCount: customMatches.length,
     })
   } catch (err) {
