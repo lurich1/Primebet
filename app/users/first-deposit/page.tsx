@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import Script from 'next/script'
-import { Loader2, ArrowLeft, Wallet, CheckCircle2 } from 'lucide-react'
+import { Loader2, ArrowLeft, Wallet, CheckCircle2, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
@@ -308,6 +308,15 @@ function DepositForm() {
                       {error}
                     </div>
                   )}
+
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-foreground flex items-start gap-2">
+                    <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                    <span>
+                      <strong>Paying with Telecel?</strong> The OTP only arrives if WhatsApp is
+                      open on that SIM. If you don&apos;t use WhatsApp on this number, pay with{' '}
+                      <strong>MTN</strong> instead — the code comes by SMS.
+                    </span>
+                  </div>
 
                   <Button
                     type="submit"

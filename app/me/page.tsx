@@ -26,6 +26,7 @@ import {
   LogOut,
   Copy,
   Check,
+  Info,
 } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,7 @@ import {
 } from '@/lib/user-session'
 import { PAYSTACK_SDK_SRC, ghsToPesewas } from '@/lib/paystack-client'
 import { formatMoney } from '@/lib/format-money'
+import { SUPPORT_TELEGRAM_URL } from '@/lib/support'
 
 interface UserProfile {
   id: string
@@ -75,7 +77,7 @@ const QUICK_LINKS = [
 const MENU_ITEMS = [
   { label: 'My SportySocial', icon: Users, href: '#' },
   { label: 'Daily Streak', icon: Flame, href: '#', badge: '2' },
-  { label: 'Customer Service', icon: MessageCircle, href: 'https://t.me/primebet', external: true },
+  { label: 'Customer Service', icon: MessageCircle, href: SUPPORT_TELEGRAM_URL, external: true },
   { label: 'How to Play', icon: HelpCircle, href: '#' },
   { label: 'Settings', icon: Settings, href: '#' },
 ] as const
@@ -636,6 +638,14 @@ export default function MePage() {
                     {verifyError}
                   </p>
                 )}
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-foreground flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                  <span>
+                    <strong>Telecel users:</strong> the OTP only arrives if WhatsApp is open on
+                    that SIM. Pay with <strong>MTN</strong> if you don&apos;t use WhatsApp on this
+                    number.
+                  </span>
+                </div>
                 <Button
                   type="button"
                   onClick={startVerificationDeposit}

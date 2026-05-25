@@ -10,6 +10,7 @@ import { PromoCarousel } from '@/components/promo-carousel'
 import { LeaguesWithUpcoming } from '@/components/top-events'
 import { MobileNav } from '@/components/mobile-nav'
 import { HomeBalanceCard } from '@/components/home-balance-card'
+import { WinnersTicker } from '@/components/winners-ticker'
 import { useMatches } from '@/hooks/use-matches'
 import { removeSelectionById, toggleSelection } from '@/lib/bet-slip-utils'
 import type { BetSelection } from '@/lib/types'
@@ -39,6 +40,9 @@ export default function HomePage() {
         <main className="flex-1 min-w-0 min-h-[calc(100vh-64px)] pb-20 xl:pb-0">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 lg:p-6">
             <HomeBalanceCard />
+            <div className="mt-3">
+              <WinnersTicker />
+            </div>
             <LeaguesWithUpcoming matches={matches} />
 
             <div className="mt-6">

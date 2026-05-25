@@ -8,6 +8,7 @@ import { Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
+import { SUPPORT_TELEGRAM_URL } from '@/lib/support'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -161,7 +162,7 @@ export default function LoginPage() {
           <p className="text-center mt-6 text-sm text-muted-foreground">
             Need help?{' '}
             <Link
-              href="https://t.me/primebet"
+              href={SUPPORT_TELEGRAM_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
