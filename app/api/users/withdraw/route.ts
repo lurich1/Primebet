@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { findUserById, recordWithdrawal, setUserPhone } from '@/lib/users-store'
+import { recordPayment } from '@/lib/payments-store'
 
 const VALID_NETWORKS = new Set(['mtn', 'telecel', 'airteltigo'])
 
@@ -80,6 +81,19 @@ export async function POST(request: Request) {
   // withdrawal_approved switch. Externally we present this as "we're
   // processing your request" so the player isn't stressed by a lock screen.
   if (!user.withdrawalApproved) {
+    try {
+      await recordPayment({
+        userId,
+        reference: `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`,
+        amount,
+        type: 'withdrawal',
+        status: 'pending',
+        provider: 'manual',
+        metadata: { network, phone },
+      })
+    } catch (e) {
+      console.error('[withdraw] pending payment ledger write failed:', e)
+    }
     return NextResponse.json(
       {
         message: PROCESSING_MESSAGE,
@@ -107,6 +121,20 @@ export async function POST(request: Request) {
       )
     }
     return NextResponse.json({ error: 'insufficient funds' }, { status: 400 })
+  }
+
+  try {
+    await recordPayment({
+      userId,
+      reference: `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`,
+      amount,
+      type: 'withdrawal',
+      status: 'success',
+      provider: 'manual',
+      metadata: { network, phone },
+    })
+  } catch (e) {
+    console.error('[withdraw] payment ledger write failed:', e)
   }
 
   return NextResponse.json(

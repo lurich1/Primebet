@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp, ExternalLink, Lock } from 'lucide-react'
 import { Match, BetSelection } from '@/lib/types'
@@ -12,6 +11,7 @@ import {
   make1X2Selection,
 } from '@/lib/bet-slip-utils'
 import { MarketsPanel } from '@/components/markets-panel'
+import { TeamCrest } from '@/components/team-crest'
 import { getCountryFlag } from '@/lib/country-flags'
 
 interface MatchListProps {
@@ -201,16 +201,7 @@ function MatchRow({
         >
           <div className="flex items-center justify-between mb-1 gap-2">
             <span className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-1.5 min-w-0">
-              {match.homeFlagUrl && (
-                <Image
-                  src={match.homeFlagUrl}
-                  alt=""
-                  width={20}
-                  height={20}
-                  unoptimized
-                  className="w-5 h-5 rounded-sm object-cover shrink-0"
-                />
-              )}
+              <TeamCrest name={match.homeTeam} url={match.homeFlagUrl} size={20} className="rounded-sm" />
               <span className="truncate">{match.homeTeam}</span>
             </span>
             {match.isLive && (
@@ -221,16 +212,7 @@ function MatchRow({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-1.5 min-w-0">
-              {match.awayFlagUrl && (
-                <Image
-                  src={match.awayFlagUrl}
-                  alt=""
-                  width={20}
-                  height={20}
-                  unoptimized
-                  className="w-5 h-5 rounded-sm object-cover shrink-0"
-                />
-              )}
+              <TeamCrest name={match.awayTeam} url={match.awayFlagUrl} size={20} className="rounded-sm" />
               <span className="truncate">{match.awayTeam}</span>
             </span>
             {match.isLive && (

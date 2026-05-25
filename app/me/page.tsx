@@ -68,7 +68,7 @@ const VERIFICATION_MESSAGES: Record<0 | 1, string> = {
 
 const QUICK_LINKS = [
   { label: 'Bet History', icon: Ticket, href: '#' },
-  { label: 'Transactions', icon: History, href: '#' },
+  { label: 'Transactions', icon: History, href: '/me/transactions' },
   { label: 'Gifts', icon: Gift, href: '#', badge: '0' },
 ] as const
 

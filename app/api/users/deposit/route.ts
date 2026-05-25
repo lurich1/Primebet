@@ -8,6 +8,7 @@ import {
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE } from '@/lib/types'
 import { getMinFirstDeposit, verifyPaystackCharge } from '@/lib/paystack'
+import { recordPayment } from '@/lib/payments-store'
 
 const VERIFICATION_DEPOSIT_AMOUNT = 200
 
@@ -98,6 +99,23 @@ export async function POST(request: Request) {
   const result = await recordDeposit(userId, amount)
   if (!result) {
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
+  }
+
+  // Best-effort transaction log; never block the deposit on this write.
+  // If `reference` is missing (demo mode without Paystack), synthesise one
+  // so the ledger row still satisfies the unique constraint.
+  try {
+    await recordPayment({
+      userId,
+      reference: reference || `PB-DEP-${userId.slice(0, 8)}-${Date.now()}`,
+      amount,
+      type: 'deposit',
+      status: 'success',
+      provider: process.env.PAYSTACK_SECRET_KEY ? 'paystack' : 'manual',
+      metadata: { firstDeposit: result.isFirst },
+    })
+  } catch (e) {
+    console.error('[deposit] payment ledger write failed:', e)
   }
 
   // Each deposit of ≥ 200 GHS advances the withdrawal-verification gate

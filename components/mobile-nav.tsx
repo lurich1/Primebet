@@ -115,28 +115,25 @@ function MobileBetSlipDrawer({
 }: DrawerProps) {
   if (!isOpen) return null
 
+  // Full-screen sheet (Sportybet-style): slides in from the bottom and fills
+  // the entire viewport so the stake input and totals are always visible
+  // when the keyboard is open.
   return (
-    <div className="fixed inset-0 z-50 xl:hidden">
+    <div className="fixed inset-0 z-50 xl:hidden bg-background flex flex-col">
+      <div className="bg-card px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <h2 className="font-bold text-lg text-foreground">Bet Slip</h2>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-md hover:bg-secondary transition-colors"
+          aria-label="Close bet slip"
+        >
+          <X className="w-5 h-5 text-muted-foreground" />
+        </button>
+      </div>
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <div
-        className="absolute bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-2xl max-h-[88vh] overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+        className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]"
         style={{ overscrollBehavior: 'contain' }}
       >
-        <div className="sticky top-0 bg-card px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-bold text-lg text-foreground">Bet Slip</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-secondary transition-colors"
-            aria-label="Close bet slip"
-          >
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
-
         <BetSlipPanel
           selections={selections}
           onRemoveSelection={onRemoveSelection}

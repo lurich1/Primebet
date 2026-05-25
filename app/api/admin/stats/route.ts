@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { readBets } from '@/lib/bets-store'
+import { listUsersForAdmin } from '@/lib/users-store'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const bets = await readBets()
+  const [bets, users] = await Promise.all([readBets(), listUsersForAdmin()])
+  const totalUserDeposits = users.reduce((s, u) => s + (u.totalDeposited ?? 0), 0)
+  const totalUserWithdrawals = users.reduce((s, u) => s + (u.totalWithdrawn ?? 0), 0)
 
   const open = bets.filter((b) => b.status === 'pending')
   const won = bets.filter((b) => b.status === 'won')
@@ -70,6 +73,7 @@ export async function GET() {
       open: open.length,
       won: won.length,
       lost: lost.length,
+      users: users.length,
     },
     money: {
       totalStake: +totalStake.toFixed(2),
@@ -77,6 +81,8 @@ export async function GET() {
       settledStake: +settledStake.toFixed(2),
       totalReturns: +totalReturns.toFixed(2),
       netPL: +netPL.toFixed(2),
+      totalUserDeposits: +totalUserDeposits.toFixed(2),
+      totalUserWithdrawals: +totalUserWithdrawals.toFixed(2),
     },
     winRate,
     byDay,

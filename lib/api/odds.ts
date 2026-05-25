@@ -260,21 +260,51 @@ function apiPartialMarkets(event: OddsApiEvent): Partial<MarketBook> {
 }
 
 /**
- * Map real wall-clock elapsed minutes since kick-off to a football match clock.
- *
- *   real 0–44   → "0'"…"44'"  (1st half)
- *   real 45–59  → "HT"        (15-minute halftime break)
- *   real 60–104 → "46'"…"90'" (2nd half resumes from 46')
- *   real ≥ 105  → "FT"        (full time — match hidden from feed)
- *
- * No stoppage time — the provider doesn't expose it. Mirrors the regime used
- * by tickingMinute() in lib/custom-matches-store.ts so API and custom matches
- * behave consistently from a punter's perspective.
+ * Deterministic 1–4 minute stoppage derived from the event id and half index,
+ * mirroring stoppageFor() in lib/custom-matches-store.ts so API and custom
+ * matches use the same convention.
  */
-function footballMatchClock(elapsedMin: number): { minute: string; finished: boolean } {
+function stoppageFor(eventId: string, half: 1 | 2): number {
+  let h = 0
+  for (let i = 0; i < eventId.length; i++) {
+    h = (h * 31 + eventId.charCodeAt(i) + half) | 0
+  }
+  return (Math.abs(h) % 4) + 1 // 1..4
+}
+
+const HT_BREAK_MINUTES = 15
+
+/**
+ * Map real wall-clock elapsed minutes since kick-off to a football match clock,
+ * with proper stoppage time and halftime pause so the displayed minute tracks a
+ * real broadcast (and Sportybet) instead of running ~3–5 min ahead.
+ *
+ *   real 0..44                          → "1'"…"44'"
+ *   real 45..44+stoppage1               → "45+1'"…"45+N'" (1st half stoppage)
+ *   real (44+stoppage1)..(+15)          → "HT"            (15-min break)
+ *   real (then)..(+45)                  → "46'"…"90'"     (2nd half)
+ *   real (then)..(+stoppage2)           → "90+1'"…"90+M'" (2nd half stoppage)
+ *   real beyond                         → "FT"
+ */
+function footballMatchClock(
+  eventId: string,
+  elapsedMin: number,
+): { minute: string; finished: boolean } {
+  const stoppage1 = stoppageFor(eventId, 1)
+  const stoppage2 = stoppageFor(eventId, 2)
+
   if (elapsedMin < 45) return { minute: `${elapsedMin}'`, finished: false }
-  if (elapsedMin < 60) return { minute: 'HT', finished: false }
-  if (elapsedMin < 105) return { minute: `${elapsedMin - 14}'`, finished: false }
+  if (elapsedMin < 45 + stoppage1) {
+    return { minute: `45+${elapsedMin - 45 + 1}'`, finished: false }
+  }
+  if (elapsedMin < 45 + stoppage1 + HT_BREAK_MINUTES) {
+    return { minute: 'HT', finished: false }
+  }
+  const secondHalf = 46 + (elapsedMin - 45 - stoppage1 - HT_BREAK_MINUTES)
+  if (secondHalf <= 90) return { minute: `${secondHalf}'`, finished: false }
+  if (secondHalf < 90 + stoppage2) {
+    return { minute: `90+${secondHalf - 90 + 1}'`, finished: false }
+  }
   return { minute: 'FT', finished: true }
 }
 
@@ -289,7 +319,7 @@ function toMatch(event: OddsApiEvent, sport: string): Match {
   let isLive = started
   if (started) {
     if (sport === 'football') {
-      const clock = footballMatchClock(elapsedMin)
+      const clock = footballMatchClock(event.id, elapsedMin)
       minute = clock.minute
       if (clock.finished) isLive = false
     } else {

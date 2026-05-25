@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Receipt,
-  Activity,
   TrendingUp,
   TrendingDown,
   Loader2,
@@ -12,13 +11,15 @@ import {
 } from 'lucide-react'
 
 interface StatsResponse {
-  counts: { total: number; open: number; won: number; lost: number }
+  counts: { total: number; open: number; won: number; lost: number; users: number }
   money: {
     totalStake: number
     openStake: number
     settledStake: number
     totalReturns: number
     netPL: number
+    totalUserDeposits: number
+    totalUserWithdrawals: number
   }
   winRate: number
   byDay: { date: string; count: number; stake: number }[]
@@ -88,38 +89,30 @@ export default function AdminOverviewPage() {
       <div>
         <h1 className="text-2xl font-bold">Overview</h1>
         <p className="text-sm text-muted-foreground">
-          Live stats from <code className="font-mono text-xs">data/bets.json</code>. Refreshes every 15s.
+          Live stats from Supabase. Refreshes every 15s.
         </p>
       </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi
+          label="Total deposits"
+          value={`GHS ${stats.money.totalUserDeposits.toFixed(2)}`}
+          sub={`across ${stats.counts.users} user${stats.counts.users === 1 ? '' : 's'}`}
+          tone="good"
+          icon={<TrendingUp className="w-4 h-4 text-success" />}
+        />
+        <Kpi
+          label="Total withdrawals"
+          value={`GHS ${stats.money.totalUserWithdrawals.toFixed(2)}`}
+          tone="bad"
+          icon={<TrendingDown className="w-4 h-4 text-destructive" />}
+        />
         <Kpi label="Total bets" value={stats.counts.total.toString()} />
         <Kpi
           label="Open"
           value={stats.counts.open.toString()}
           sub={`${stats.money.openStake.toFixed(2)} at stake`}
-        />
-        <Kpi
-          label="Win rate"
-          value={`${stats.winRate}%`}
-          sub={`${stats.counts.won}W / ${stats.counts.lost}L`}
-        />
-        <Kpi
-          label="Net P&L"
-          value={(stats.money.netPL >= 0 ? '+' : '') + stats.money.netPL.toFixed(2)}
-          tone={
-            stats.money.netPL > 0 ? 'good' : stats.money.netPL < 0 ? 'bad' : 'neutral'
-          }
-          icon={
-            stats.money.netPL > 0 ? (
-              <TrendingUp className="w-4 h-4 text-success" />
-            ) : stats.money.netPL < 0 ? (
-              <TrendingDown className="w-4 h-4 text-destructive" />
-            ) : (
-              <Activity className="w-4 h-4 text-muted-foreground" />
-            )
-          }
         />
         <Kpi label="Total staked" value={stats.money.totalStake.toFixed(2)} />
         <Kpi label="Total returns" value={stats.money.totalReturns.toFixed(2)} tone="good" />

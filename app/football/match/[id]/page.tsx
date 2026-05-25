@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ArrowLeft, Loader2, Lock } from 'lucide-react'
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { BetSlip } from '@/components/bet-slip'
 import { MobileNav } from '@/components/mobile-nav'
 import { MarketsPanel } from '@/components/markets-panel'
+import { TeamCrest } from '@/components/team-crest'
 import { useMatches } from '@/hooks/use-matches'
 import { getBettingState } from '@/lib/match-betting'
 import {
@@ -218,20 +218,7 @@ function TeamBadge({
   flagUrl?: string
   align?: 'right'
 }) {
-  const badge = flagUrl ? (
-    <Image
-      src={flagUrl}
-      alt=""
-      width={40}
-      height={40}
-      unoptimized
-      className="w-10 h-10 rounded-full object-cover shrink-0 bg-secondary"
-    />
-  ) : (
-    <div className="w-10 h-10 bg-secondary rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-      {name.substring(0, 2).toUpperCase()}
-    </div>
-  )
+  const badge = <TeamCrest name={name} url={flagUrl} size={40} />
   return (
     <div className={`flex-1 flex items-center gap-2 min-w-0 ${align === 'right' ? 'justify-end' : ''}`}>
       {align !== 'right' && badge}
