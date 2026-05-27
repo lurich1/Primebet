@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { findPaymentById, markPaymentResolved } from '@/lib/payments-store'
-import { creditBalance } from '@/lib/users-store'
+import { applyDepositCredit } from '@/lib/deposit-credit'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,8 +50,10 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'invalid amount on payment row' }, { status: 400 })
   }
 
-  const updatedUser = await creditBalance(payment.userId, payment.amount)
-  if (!updatedUser) {
+  // Full deposit pipeline — bumps totals, advances verification step when
+  // the amount qualifies, and fires sub-admin commission for referred users.
+  const result = await applyDepositCredit(payment.userId, payment.amount)
+  if (!result) {
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
   }
 
@@ -60,10 +62,14 @@ export async function POST(request: Request, { params }: Params) {
   return NextResponse.json({
     payment: resolved,
     user: {
-      id: updatedUser.id,
-      name: updatedUser.name,
-      balance: updatedUser.balance ?? 0,
+      id: result.user.id,
+      name: result.user.name,
+      balance: result.user.balance ?? 0,
+      totalDeposited: result.user.totalDeposited,
+      verificationStep: result.user.verificationStep ?? 0,
     },
     credited: payment.amount,
+    isFirstDeposit: result.isFirstDeposit,
+    commission: result.commission,
   })
 }
