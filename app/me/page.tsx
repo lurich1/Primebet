@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -81,6 +81,16 @@ const MENU_ITEMS = [
 ] as const
 
 export default function MePage() {
+  // useSearchParams() needs to live inside a Suspense boundary or
+  // `next build` errors out trying to statically prerender the route.
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <MePageInner />
+    </Suspense>
+  )
+}
+
+function MePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [profile, setProfile] = useState<UserProfile | null>(null)
