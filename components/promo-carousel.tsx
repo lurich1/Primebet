@@ -1,122 +1,284 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight, ChevronLeft, ChevronRight, Gift, Sparkles, Trophy } from 'lucide-react'
+import { getUserId } from '@/lib/user-session'
+import { formatMoney } from '@/lib/format-money'
+import {
+  DEFAULT_CURRENCY,
+  isCurrencyCode,
+  type CurrencyCode,
+} from '@/lib/countries'
 
-const promos = [
+// One slide's content. Amounts are stored per currency so each market shows a
+// number that actually makes sense — we don't FX-convert at runtime since the
+// real bonus terms are set by operations, not a forex feed.
+interface Promo {
+  id: string
+  eyebrow: string
+  /** Tiny line just above the giant headline ("WIN UP TO", "EARN", "GET"). */
+  preheadline?: string
+  /** The huge number/percentage that dominates the card. */
+  headline: string
+  /** Smaller word(s) immediately after the headline ("BONUS", "CEDIS"). */
+  subheadline?: string
+  /** Caption line under the headline cluster ("Up to GHS 500 · T&Cs apply"). */
+  caption: (currency: CurrencyCode) => string
+  cta: string
+  /** Destination depends on whether the user is signed in. */
+  href: (userId: string | null) => string
+  Icon: typeof Trophy
+  /** Tailwind gradient utility classes (background fill). */
+  gradient: string
+  /** Tailwind text color for the headline. */
+  accent: string
+}
+
+// Per-currency amount maps. Tune these per market; they're marketing values,
+// not derived from FX. Fallback to GHS when an entry is missing.
+const FIRST_DEPOSIT_MAX: Record<CurrencyCode, number> = {
+  GHS: 500,
+  NGN: 75_000,
+  KES: 6_500,
+  ZAR: 900,
+}
+const REFERRAL_AMOUNT: Record<CurrencyCode, number> = {
+  GHS: 50,
+  NGN: 7_500,
+  KES: 650,
+  ZAR: 90,
+}
+const WEEKEND_PRIZE: Record<CurrencyCode, number> = {
+  GHS: 3_000,
+  NGN: 450_000,
+  KES: 39_000,
+  ZAR: 5_400,
+}
+
+function pick<T>(map: Record<CurrencyCode, T>, currency: CurrencyCode): T {
+  return map[currency] ?? map[DEFAULT_CURRENCY]
+}
+
+const PROMOS: Promo[] = [
   {
-    id: 1,
-    title: 'WIN UP TO',
-    highlight: '3,000',
-    subtitle: 'CEDIS',
-    description: 'BIGGER WEEKEND!',
-    cta: 'Claim Now',
-    bgGradient: 'from-amber-500/20 via-red-500/20 to-purple-500/20',
-    accentColor: 'text-amber-400',
+    id: 'first-deposit',
+    eyebrow: 'First Deposit Bonus',
+    headline: '100%',
+    subheadline: 'BONUS',
+    caption: (c) => `Up to ${c} ${formatMoney(pick(FIRST_DEPOSIT_MAX, c), c)} · T&Cs apply`,
+    cta: 'Claim now',
+    href: (userId) => (userId ? `/users/first-deposit?userId=${userId}` : '/register'),
+    Icon: Trophy,
+    gradient: 'from-amber-500 via-orange-500 to-red-600',
+    accent: 'text-white',
   },
   {
-    id: 2,
-    title: 'REFER A FRIEND',
-    highlight: '300',
-    subtitle: 'CEDIS',
-    description: 'GET UP TO',
-    cta: 'Enter Now',
-    bgGradient: 'from-emerald-500/20 via-teal-500/20 to-cyan-500/20',
-    accentColor: 'text-emerald-400',
+    id: 'refer-a-friend',
+    eyebrow: 'Refer a Friend',
+    preheadline: 'EARN',
+    headline: '',
+    subheadline: 'per friend',
+    caption: (c) =>
+      `When they make their first deposit of ${c} ${formatMoney(pick(FIRST_DEPOSIT_MAX, c), c)}`,
+    cta: 'Get my link',
+    href: (userId) => (userId ? '/me' : '/register'),
+    Icon: Gift,
+    gradient: 'from-emerald-500 via-teal-600 to-cyan-600',
+    accent: 'text-white',
   },
   {
-    id: 3,
-    title: 'FIRST BET',
-    highlight: '100%',
-    subtitle: 'BONUS',
-    description: 'UP TO GH¢500',
-    cta: 'Get Bonus',
-    bgGradient: 'from-blue-500/20 via-indigo-500/20 to-purple-500/20',
-    accentColor: 'text-blue-400',
+    id: 'weekend-booster',
+    eyebrow: 'Weekend Booster',
+    preheadline: 'WIN UP TO',
+    headline: '',
+    caption: () => 'Place 5+ bets this weekend · biggest wins go bigger',
+    cta: 'View boost',
+    href: () => '/live',
+    Icon: Sparkles,
+    gradient: 'from-violet-600 via-purple-600 to-fuchsia-600',
+    accent: 'text-white',
   },
 ]
 
-export function PromoCarousel() {
-  const [currentIndex, setCurrentIndex] = useState(0)
+/**
+ * Resolve a slide's headline. For the two refer / weekend slides the headline
+ * is the per-currency amount; for first-deposit it's the literal "100%".
+ */
+function headlineFor(promo: Promo, currency: CurrencyCode): string {
+  if (promo.id === 'refer-a-friend') {
+    return `${currency} ${formatMoney(pick(REFERRAL_AMOUNT, currency), currency)}`
+  }
+  if (promo.id === 'weekend-booster') {
+    return `${currency} ${formatMoney(pick(WEEKEND_PRIZE, currency), currency)}`
+  }
+  return promo.headline
+}
 
+export function PromoCarousel() {
+  const [index, setIndex] = useState(0)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY)
+  const [isPaused, setIsPaused] = useState(false)
+
+  // Resolve the signed-in user's currency on mount so amounts render in their
+  // wallet currency. Logged-out users keep the GHS default.
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % promos.length)
-    }, 5000)
-    return () => clearInterval(timer)
+    const uid = getUserId()
+    setUserId(uid)
+    if (!uid) return
+    let cancelled = false
+    void fetch(`/api/users/${uid}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        if (isCurrencyCode(data.currency)) setCurrency(data.currency)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  const goToSlide = (index: number) => setCurrentIndex(index)
-  const prevSlide = () => setCurrentIndex((prev) => (prev - 1 + promos.length) % promos.length)
-  const nextSlide = () => setCurrentIndex((prev) => (prev + 1) % promos.length)
+  // Autoplay every 6s; pauses while hovered/touched so users can read.
+  useEffect(() => {
+    if (isPaused) return
+    const t = setInterval(() => setIndex((i) => (i + 1) % PROMOS.length), 6000)
+    return () => clearInterval(t)
+  }, [isPaused])
+
+  const current = PROMOS[index]
+  const Icon = current.Icon
+  const ctaHref = current.href(userId)
+  const headline = useMemo(() => headlineFor(current, currency), [current, currency])
 
   return (
-    <div className="relative rounded-xl overflow-hidden">
-      {/* Slides */}
-      <div className="relative h-[200px] md:h-[240px]">
-        {promos.map((promo, index) => (
-          <div
-            key={promo.id}
-            className={`absolute inset-0 transition-all duration-500 ease-in-out ${
-              index === currentIndex
-                ? 'opacity-100 translate-x-0'
-                : index < currentIndex
-                  ? 'opacity-0 -translate-x-full'
-                  : 'opacity-0 translate-x-full'
-            }`}
-          >
-            <div className={`h-full bg-gradient-to-r ${promo.bgGradient} bg-card border border-border rounded-xl p-6 md:p-8 flex flex-col justify-center`}>
-              <p className="text-sm text-muted-foreground uppercase tracking-wider mb-1">
-                {promo.description}
-              </p>
-              <p className="text-xs text-muted-foreground mb-2">{promo.title}</p>
-              <div className="flex items-baseline gap-2 mb-4">
-                <span className={`text-5xl md:text-6xl font-black ${promo.accentColor}`}>
-                  {promo.highlight}
-                </span>
-                <span className="text-2xl md:text-3xl font-bold text-foreground">
-                  {promo.subtitle}
-                </span>
+    <div
+      className="relative rounded-2xl overflow-hidden"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
+      <div className="relative h-[210px] sm:h-[230px]">
+        {PROMOS.map((promo, i) => {
+          const active = i === index
+          const Glyph = promo.Icon
+          const slideHeadline = headlineFor(promo, currency)
+          return (
+            <div
+              key={promo.id}
+              aria-hidden={!active}
+              className={`absolute inset-0 transition-all duration-500 ease-out ${
+                active ? 'opacity-100 translate-x-0' : i < index ? 'opacity-0 -translate-x-4' : 'opacity-0 translate-x-4'
+              }`}
+            >
+              <div className={`relative h-full bg-gradient-to-br ${promo.gradient} text-white overflow-hidden`}>
+                {/* Subtle radial-dot pattern overlay so the gradient doesn't read flat */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0 opacity-[0.12]"
+                  style={{
+                    backgroundImage:
+                      'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+                    backgroundSize: '14px 14px',
+                  }}
+                />
+                {/* Glow blob behind the icon */}
+                <div
+                  aria-hidden
+                  className="absolute -right-12 -top-10 w-56 h-56 rounded-full bg-white/15 blur-2xl"
+                />
+
+                <div className="relative h-full px-5 sm:px-6 py-5 flex items-center gap-4">
+                  {/* Left: copy + CTA */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.18em] font-bold text-white/85">
+                        {promo.eyebrow}
+                      </p>
+                      {promo.preheadline && (
+                        <p className="text-xs sm:text-sm font-bold text-white/85 mt-2 leading-none uppercase tracking-wider">
+                          {promo.preheadline}
+                        </p>
+                      )}
+                      <p className={`mt-1 font-black leading-none ${promo.accent} drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)] tabular-nums`}
+                        style={{
+                          // Scale headline down for big currency strings (e.g. "NGN 450,000")
+                          // so it doesn't wrap on narrow phones.
+                          fontSize:
+                            slideHeadline.length > 8
+                              ? 'clamp(1.75rem, 7vw, 2.75rem)'
+                              : 'clamp(2.5rem, 10vw, 3.5rem)',
+                        }}
+                      >
+                        {slideHeadline}
+                      </p>
+                      {promo.subheadline && (
+                        <p className="text-base sm:text-lg font-extrabold uppercase tracking-wide text-white/90 mt-0.5">
+                          {promo.subheadline}
+                        </p>
+                      )}
+                      <p className="text-[10px] sm:text-xs text-white/80 mt-1.5 line-clamp-2">
+                        {promo.caption(currency)}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={promo.href(userId)}
+                      className="mt-3 inline-flex items-center gap-1.5 self-start px-4 py-2 rounded-full bg-white text-foreground font-bold text-xs sm:text-sm hover:bg-white/90 transition-colors shadow-md"
+                    >
+                      {promo.cta}
+                      <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </Link>
+                  </div>
+
+                  {/* Right: oversized translucent icon */}
+                  <div className="relative shrink-0 flex items-center justify-center w-20 sm:w-32">
+                    <Glyph
+                      className="w-20 h-20 sm:w-32 sm:h-32 text-white/30"
+                      strokeWidth={1.25}
+                    />
+                  </div>
+                </div>
               </div>
-              <button className="w-fit px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors">
-                {promo.cta}
-              </button>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* Navigation Arrows */}
+      {/* Arrows — hidden on touch so they don't fight the swipe area; visible on hover for desktop */}
       <button
-        onClick={prevSlide}
-        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-background/80 backdrop-blur-sm rounded-full hover:bg-background transition-colors"
-        aria-label="Previous slide"
+        onClick={() => setIndex((i) => (i - 1 + PROMOS.length) % PROMOS.length)}
+        className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors"
+        aria-label="Previous promo"
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
       <button
-        onClick={nextSlide}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-background/80 backdrop-blur-sm rounded-full hover:bg-background transition-colors"
-        aria-label="Next slide"
+        onClick={() => setIndex((i) => (i + 1) % PROMOS.length)}
+        className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors"
+        aria-label="Next promo"
       >
         <ChevronRight className="w-5 h-5" />
       </button>
 
-      {/* Dots */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-        {promos.map((_, index) => (
+      {/* Dots — anchored to the top-right so they never overlap the CTA on the bottom-left */}
+      <div className="absolute top-3 right-3 flex gap-1.5">
+        {PROMOS.map((p, i) => (
           <button
-            key={index}
-            onClick={() => goToSlide(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === currentIndex
-                ? 'bg-primary w-6'
-                : 'bg-muted-foreground/50 hover:bg-muted-foreground'
+            key={p.id}
+            onClick={() => setIndex(i)}
+            className={`h-1.5 rounded-full transition-all ${
+              i === index ? 'bg-white w-5' : 'bg-white/50 hover:bg-white/80 w-1.5'
             }`}
-            aria-label={`Go to slide ${index + 1}`}
+            aria-label={`Go to ${p.eyebrow}`}
           />
         ))}
       </div>
+
+      {/* Hidden CTA route reference so dev tools / accessibility tree see the resolved URL */}
+      <span className="sr-only">{ctaHref}</span>
     </div>
   )
 }
