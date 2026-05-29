@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Gift, Sparkles, Trophy } from 'lucide-react'
+import { ArrowRight, Sparkles, Trophy } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 import { MeSubpageHeader } from '@/components/me-subpage-header'
 import { getUserId } from '@/lib/user-session'
@@ -20,12 +20,6 @@ const FIRST_DEPOSIT_MAX: Record<CurrencyCode, number> = {
   NGN: 75_000,
   KES: 6_500,
   ZAR: 900,
-}
-const REFERRAL_AMOUNT: Record<CurrencyCode, number> = {
-  GHS: 50,
-  NGN: 7_500,
-  KES: 650,
-  ZAR: 90,
 }
 const WEEKEND_PRIZE: Record<CurrencyCode, number> = {
   GHS: 3_000,
@@ -66,16 +60,6 @@ export default function GiftsPage() {
       Icon: Trophy,
       cta: 'Claim now',
       href: depositHref,
-    },
-    {
-      id: 'refer',
-      eyebrow: 'Refer a Friend',
-      headline: `${currency} ${formatMoney(pick(REFERRAL_AMOUNT, currency), currency)}`,
-      caption: 'Earned every time a friend you invite makes their first deposit.',
-      gradient: 'from-emerald-500 via-teal-600 to-cyan-600',
-      Icon: Gift,
-      cta: 'Share my link',
-      href: '/me/social',
     },
     {
       id: 'weekend',

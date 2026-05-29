@@ -8,7 +8,6 @@ import {
   Ticket,
   History,
   Gift,
-  Users,
   Flame,
   MessageCircle,
   HelpCircle,
@@ -81,7 +80,6 @@ const QUICK_LINKS = [
 ] as const
 
 const MENU_ITEMS = [
-  { label: 'My Referrals', icon: Users, href: '/me/social' },
   { label: 'Daily Streak', icon: Flame, href: '/me/streak', badge: '2' },
   { label: 'Customer Service', icon: MessageCircle, href: SUPPORT_TELEGRAM_URL, external: true },
   { label: 'How to Play', icon: HelpCircle, href: '/me/how-to-play' },
