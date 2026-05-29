@@ -12,15 +12,19 @@ create extension if not exists "citext";     -- case-insensitive email
 -- 1. SUB-ADMINS (partner / referral accounts)
 -- ============================================================================
 create table if not exists public.sub_admins (
-    id                       uuid primary key default gen_random_uuid(),
-    name                     text not null check (char_length(name) between 2 and 120),
-    email                    citext not null unique,
-    password_hash            text not null,
-    referral_code            text not null unique check (referral_code = upper(referral_code)),
-    approved                 boolean not null default false,
-    commission_balance       numeric(18, 2) not null default 0 check (commission_balance >= 0),
-    total_commission_earned  numeric(18, 2) not null default 0 check (total_commission_earned >= 0),
-    created_at               timestamptz not null default now()
+    id                          uuid primary key default gen_random_uuid(),
+    name                        text not null check (char_length(name) between 2 and 120),
+    email                       citext not null unique,
+    password_hash               text not null,
+    referral_code               text not null unique check (referral_code = upper(referral_code)),
+    approved                    boolean not null default false,
+    -- Legacy GHS-only scalars; kept for historical reporting, application now reads/writes the JSONB maps.
+    commission_balance          numeric(18, 2) not null default 0 check (commission_balance >= 0),
+    total_commission_earned     numeric(18, 2) not null default 0 check (total_commission_earned >= 0),
+    -- Per-currency balances: { "GHS": 12.34, "NGN": 5000, "KES": 0, "ZAR": 0 }
+    commission_balances         jsonb not null default '{}'::jsonb,
+    total_commission_earned_by  jsonb not null default '{}'::jsonb,
+    created_at                  timestamptz not null default now()
 );
 
 create index if not exists idx_sub_admins_referral_code on public.sub_admins (referral_code);
@@ -34,6 +38,13 @@ create table if not exists public.users (
     email                    citext not null unique,
     password_hash            text not null,
     phone                    text,
+    -- Country / currency the wallet is denominated in. Fixed at signup.
+    country                  text not null default 'GH' check (country in ('GH', 'NG', 'KE', 'ZA')),
+    currency                 text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
+    -- KYC value captured at signup (country-specific shape: Ghana Card, BVN/NIN, etc.).
+    kyc_id                   text,
+    -- Legacy column kept for Ghana users so old migration 0010 data isn't lost.
+    ghana_card               text,
     referred_by_code         text,
     referred_by_sub_admin_id uuid references public.sub_admins(id) on delete set null,
     first_deposit_amount     numeric(18, 2) not null default 0 check (first_deposit_amount >= 0),
@@ -41,7 +52,7 @@ create table if not exists public.users (
     total_deposited          numeric(18, 2) not null default 0 check (total_deposited >= 0),
     total_withdrawn          numeric(18, 2) not null default 0 check (total_withdrawn >= 0),
     balance                  numeric(18, 2) not null default 0,
-    -- 2-step withdrawal verification: 0 = none, 1 = first 200 paid, 2 = fully verified
+    -- 2-step withdrawal verification: 0 = none, 1 = first qualifying deposit paid, 2 = fully verified
     verification_step        integer not null default 0
                              check (verification_step between 0 and 2),
     -- Admin must explicitly flip this before withdrawals are allowed
@@ -62,6 +73,7 @@ create table if not exists public.commissions (
     deposit_amount    numeric(18, 2) not null check (deposit_amount > 0),
     commission_amount numeric(18, 2) not null check (commission_amount > 0),
     rate              numeric(6, 4) not null check (rate > 0 and rate <= 1),
+    currency          text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
     created_at        timestamptz not null default now()
 );
 
@@ -79,6 +91,7 @@ create table if not exists public.bets (
     stake          numeric(18, 2) not null check (stake > 0),
     total_odds     numeric(18, 4) not null check (total_odds >= 1),
     potential_win  numeric(18, 2) not null check (potential_win >= 0),
+    currency       text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
     status         text not null default 'pending'
                    check (status in ('pending', 'won', 'lost')),
     settled_at     timestamptz,
@@ -193,6 +206,12 @@ select
     (select count(*) from public.bets where status = 'pending')          as pending_bets,
     (select count(*) from public.sub_admins)                             as total_sub_admins,
     (select count(*) from public.custom_matches)                         as total_custom_matches,
+    (select coalesce(jsonb_object_agg(currency, total), '{}'::jsonb)
+       from (select currency, sum(total_deposited) as total
+               from public.users group by currency) t)                   as total_deposited_by_currency,
+    (select coalesce(jsonb_object_agg(currency, total), '{}'::jsonb)
+       from (select currency, sum(total_withdrawn) as total
+               from public.users group by currency) t)                   as total_withdrawn_by_currency,
     (select coalesce(sum(total_deposited), 0) from public.users)         as total_deposited,
     (select coalesce(sum(total_withdrawn), 0) from public.users)         as total_withdrawn,
     (select coalesce(sum(total_commission_earned), 0) from public.sub_admins) as total_commissions_paid;

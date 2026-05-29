@@ -38,12 +38,25 @@ import {
 } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 import { SUPPORT_TELEGRAM_URL } from '@/lib/support'
+import {
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  getCountry,
+  getVerificationAmount,
+  isCountryCode,
+  isCurrencyCode,
+  normalizePhone,
+  type CountryCode,
+  type CurrencyCode,
+} from '@/lib/countries'
 
 interface UserProfile {
   id: string
   name: string
   email?: string
   phone?: string | null
+  country?: string
+  currency?: string
   totalDeposited: number
   totalWithdrawn: number
   balance: number
@@ -52,18 +65,13 @@ interface UserProfile {
   firstDepositAt?: string | null
 }
 
-type MobileNetwork = 'mtn' | 'telecel' | 'airteltigo'
-
-const NETWORKS: { key: MobileNetwork; label: string; color: string }[] = [
-  { key: 'mtn', label: 'MTN', color: 'bg-amber-400 text-black' },
-  { key: 'telecel', label: 'Telecel', color: 'bg-red-500 text-white' },
-  { key: 'airteltigo', label: 'AirtelTigo', color: 'bg-blue-500 text-white' },
-]
-
-const VERIFICATION_AMOUNT = 200
-const VERIFICATION_MESSAGES: Record<0 | 1, string> = {
-  0: 'To complete account verification for withdrawals, a deposit of 200 GHC is required. Once completed, your account will be successfully verified for withdrawal access.',
-  1: 'Final verification is currently pending. A remaining verification payment of 200 GHC is required to fully enable withdrawal access on your account.',
+const NETWORK_STYLE: Record<string, string> = {
+  mtn: 'bg-amber-400 text-black',
+  telecel: 'bg-red-500 text-white',
+  airteltigo: 'bg-blue-500 text-white',
+  mpesa: 'bg-green-600 text-white',
+  airtel: 'bg-red-600 text-white',
+  bank: 'bg-slate-600 text-white',
 }
 
 const QUICK_LINKS = [
@@ -98,8 +106,10 @@ function MePageInner() {
   const [balanceHidden, setBalanceHidden] = useState(false)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [withdrawNetwork, setWithdrawNetwork] = useState<MobileNetwork>('mtn')
+  const [withdrawNetwork, setWithdrawNetwork] = useState<string>('mtn')
   const [withdrawPhone, setWithdrawPhone] = useState('')
+  const [withdrawAccount, setWithdrawAccount] = useState('')
+  const [withdrawBank, setWithdrawBank] = useState('')
   const [withdrawMsg, setWithdrawMsg] = useState<string | null>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const [withdrawLoading, setWithdrawLoading] = useState(false)
@@ -145,18 +155,21 @@ function MePageInner() {
     return () => window.removeEventListener('focus', onFocus)
   }, [loadProfile])
 
-  // Handle the redirect back from Moolre. On success we re-fetch the
-  // profile so the new balance / verification step are reflected; on
+  // Handle the redirect back from Moolre / Paystack. On success we re-fetch
+  // the profile so the new balance / verification step are reflected; on
   // failure we surface the reason as a dismissible toast. Strip the query
   // params after handling so a refresh doesn't replay them.
   useEffect(() => {
-    const status = searchParams.get('moolre')
-    if (!status) return
-    if (status === 'success') {
+    const moolre = searchParams.get('moolre')
+    const paystack = searchParams.get('paystack')
+    if (!moolre && !paystack) return
+    const success =
+      moolre === 'success' || paystack === 'success' || paystack === 'already-credited'
+    if (success) {
       setDepositToast({ kind: 'success', text: 'Deposit credited. Welcome back!' })
       void loadProfile()
     } else {
-      const reason = searchParams.get('reason')
+      const reason = searchParams.get('reason') ?? paystack ?? moolre
       setDepositToast({
         kind: 'failed',
         text: reason ? `Deposit failed: ${reason}` : 'Deposit failed. Try again.',
@@ -164,6 +177,27 @@ function MePageInner() {
     }
     router.replace('/me')
   }, [searchParams, loadProfile, router])
+
+  // Country / currency derived from the loaded profile, with safe defaults.
+  const country: CountryCode = isCountryCode(profile?.country) ? (profile!.country as CountryCode) : DEFAULT_COUNTRY
+  const currency: CurrencyCode = isCurrencyCode(profile?.currency) ? (profile!.currency as CurrencyCode) : DEFAULT_CURRENCY
+  const countryCfg = getCountry(country)
+  const verificationAmount = getVerificationAmount(country)
+  const verificationMessages: Record<0 | 1, string> = {
+    0: `To complete account verification for withdrawals, a deposit of ${currency} ${verificationAmount} is required. Once completed, your account will be successfully verified for withdrawal access.`,
+    1: `Final verification is currently pending. A remaining verification payment of ${currency} ${verificationAmount} is required to fully enable withdrawal access on your account.`,
+  }
+
+  // Default the network to the first one the country supports.
+  useEffect(() => {
+    if (countryCfg.payoutNetworks.length > 0) {
+      setWithdrawNetwork((curr) =>
+        countryCfg.payoutNetworks.some((n) => n.key === curr)
+          ? curr
+          : countryCfg.payoutNetworks[0].key,
+      )
+    }
+  }, [countryCfg])
 
   const balance = profile?.balance ?? 0
   const hasDeposited = !!profile?.firstDepositAt
@@ -227,9 +261,27 @@ function MePageInner() {
       setWithdrawError('Amount exceeds your balance.')
       return
     }
-    if (!/^(?:\+?233|0)\d{9}$/.test(withdrawPhone.replace(/\s|-/g, ''))) {
-      setWithdrawError('Enter a valid phone number (10 digits starting with 0).')
-      return
+    let payoutBody: Record<string, unknown>
+    if (countryCfg.payoutTarget === 'mobile') {
+      if (!normalizePhone(country, withdrawPhone)) {
+        setWithdrawError(`Enter a valid ${countryCfg.name} phone number.`)
+        return
+      }
+      payoutBody = { phone: withdrawPhone, network: withdrawNetwork }
+    } else {
+      if (!/^\d{6,20}$/.test(withdrawAccount.replace(/\s|-/g, ''))) {
+        setWithdrawError('Enter a valid bank account number (digits only).')
+        return
+      }
+      if (!withdrawBank.trim()) {
+        setWithdrawError('Enter the bank name.')
+        return
+      }
+      payoutBody = {
+        accountNumber: withdrawAccount,
+        bankName: withdrawBank,
+        network: withdrawNetwork,
+      }
     }
     setWithdrawLoading(true)
     try {
@@ -239,8 +291,7 @@ function MePageInner() {
         body: JSON.stringify({
           userId: profile.id,
           amount: amt,
-          network: withdrawNetwork,
-          phone: withdrawPhone,
+          ...payoutBody,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -265,7 +316,7 @@ function MePageInner() {
               }
             : prev,
         )
-        setWithdrawMsg(`Withdrew GHS ${formatMoney(amt)} successfully.`)
+        setWithdrawMsg(`Withdrew ${currency} ${formatMoney(amt, currency)} successfully.`)
         setWithdrawAmount('')
       }
     } catch (err) {
@@ -280,12 +331,15 @@ function MePageInner() {
     setVerifyError(null)
     setVerifyLoading(true)
     try {
-      const res = await fetch('/api/payments/moolre/start', {
+      const endpoint = countryCfg.gateway === 'moolre'
+        ? '/api/payments/moolre/start'
+        : '/api/payments/paystack/start'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           userId: profile.id,
-          amount: VERIFICATION_AMOUNT,
+          amount: verificationAmount,
           purpose: 'verification',
           returnPath: '/me',
         }),
@@ -411,7 +465,7 @@ function MePageInner() {
           <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mb-4 truncate">
             {balanceHidden
               ? '••••••'
-              : `GHS ${balance.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              : `${currency} ${formatMoney(balance, currency)}`}
           </p>
 
           <div className="flex gap-2">
@@ -473,7 +527,7 @@ function MePageInner() {
               <span className="truncate">Deposited</span>
             </div>
             <p className="text-sm sm:text-base font-bold text-foreground tabular-nums mt-1 truncate">
-              {balanceHidden ? '••••' : `GHS ${formatMoney(profile.totalDeposited)}`}
+              {balanceHidden ? '••••' : `${currency} ${formatMoney(profile.totalDeposited, currency)}`}
             </p>
           </div>
           <div className="rounded-xl bg-card border border-border p-2.5 sm:p-3 min-w-0">
@@ -482,7 +536,7 @@ function MePageInner() {
               <span className="truncate">Withdrawn</span>
             </div>
             <p className="text-sm sm:text-base font-bold text-foreground tabular-nums mt-1 truncate">
-              {balanceHidden ? '••••' : `GHS ${formatMoney(profile.totalWithdrawn)}`}
+              {balanceHidden ? '••••' : `${currency} ${formatMoney(profile.totalWithdrawn, currency)}`}
             </p>
           </div>
         </div>
@@ -615,7 +669,7 @@ function MePageInner() {
                   Available
                 </p>
                 <p className="text-sm font-bold text-foreground tabular-nums">
-                  GHS {formatMoney(balance)}
+                  {currency} {formatMoney(balance, currency)}
                 </p>
               </div>
             </div>
@@ -624,7 +678,7 @@ function MePageInner() {
               // Step 0 or 1 — verification deposit panel
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
-                  {VERIFICATION_MESSAGES[(profile.verificationStep ?? 0) as 0 | 1]}
+                  {verificationMessages[(profile.verificationStep ?? 0) as 0 | 1]}
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
                   <span>Verification progress</span>
@@ -646,8 +700,9 @@ function MePageInner() {
                 <div className="p-2.5 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                   <span>
-                    You&apos;ll be redirected to Moolre to pay. Your balance
-                    is credited within a few minutes of payment.
+                    You&apos;ll be redirected to {countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'} to pay. Your balance
+                    is credited
+                    {countryCfg.gateway === 'moolre' ? ' within a few minutes of payment.' : ' automatically once the payment confirms.'}
                   </span>
                 </div>
                 <Button
@@ -662,23 +717,24 @@ function MePageInner() {
                       Redirecting…
                     </>
                   ) : (
-                    `Pay GHS ${VERIFICATION_AMOUNT} to verify`
+                    `Pay ${currency} ${verificationAmount} to verify`
                   )}
                 </Button>
                 <p className="text-[11px] text-center text-muted-foreground">
-                  Secured by Moolre. Funds are credited to your wallet balance.
+                  Secured by {countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'}. Funds are credited to your wallet balance.
                 </p>
               </div>
             ) : (
             <form onSubmit={submitWithdraw} className="space-y-4">
-              {/* Network selector */}
+              {/* Payout option selector (mobile money networks for GH/KE; bank for NG/ZA) */}
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2">
-                  Mobile money network
+                  {countryCfg.payoutTarget === 'mobile' ? 'Mobile money network' : 'Payout option'}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {NETWORKS.map((n) => {
+                  {countryCfg.payoutNetworks.map((n) => {
                     const active = withdrawNetwork === n.key
+                    const style = NETWORK_STYLE[n.key] ?? 'bg-slate-600 text-white'
                     return (
                       <button
                         type="button"
@@ -687,7 +743,7 @@ function MePageInner() {
                         disabled={withdrawLoading}
                         className={`py-2 rounded-lg text-xs font-bold transition-all ${
                           active
-                            ? `${n.color} ring-2 ring-primary scale-[1.02]`
+                            ? `${style} ring-2 ring-primary scale-[1.02]`
                             : 'bg-secondary text-foreground hover:bg-secondary/80'
                         }`}
                       >
@@ -698,32 +754,73 @@ function MePageInner() {
                 </div>
               </div>
 
-              {/* Phone number — pre-filled from profile */}
-              <div>
-                <label
-                  htmlFor="withdraw-phone"
-                  className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
-                >
-                  Phone number
-                </label>
-                <Input
-                  id="withdraw-phone"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="0244XXXXXXX"
-                  value={withdrawPhone}
-                  onChange={(e) => setWithdrawPhone(e.target.value)}
-                  className="h-11 tabular-nums"
-                  disabled={withdrawLoading}
-                  autoComplete="tel"
-                  required
-                />
-                {profile.phone && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Saved from your account. Edit if it's changed.
-                  </p>
-                )}
-              </div>
+              {countryCfg.payoutTarget === 'mobile' ? (
+                <div>
+                  <label
+                    htmlFor="withdraw-phone"
+                    className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
+                  >
+                    Phone number
+                  </label>
+                  <Input
+                    id="withdraw-phone"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder={`+${countryCfg.dialCode} …`}
+                    value={withdrawPhone}
+                    onChange={(e) => setWithdrawPhone(e.target.value)}
+                    className="h-11 tabular-nums"
+                    disabled={withdrawLoading}
+                    autoComplete="tel"
+                    required
+                  />
+                  {profile.phone && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Saved from your account. Edit if it's changed.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label
+                      htmlFor="withdraw-bank"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
+                    >
+                      Bank name
+                    </label>
+                    <Input
+                      id="withdraw-bank"
+                      type="text"
+                      placeholder="e.g. Access Bank"
+                      value={withdrawBank}
+                      onChange={(e) => setWithdrawBank(e.target.value)}
+                      className="h-11"
+                      disabled={withdrawLoading}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="withdraw-account"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
+                    >
+                      Account number
+                    </label>
+                    <Input
+                      id="withdraw-account"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Account number"
+                      value={withdrawAccount}
+                      onChange={(e) => setWithdrawAccount(e.target.value)}
+                      className="h-11 tabular-nums"
+                      disabled={withdrawLoading}
+                      required
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Amount */}
               <div>
@@ -731,7 +828,7 @@ function MePageInner() {
                   htmlFor="withdraw-amount"
                   className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-2"
                 >
-                  Amount (GHS)
+                  Amount ({currency})
                 </label>
                 <Input
                   id="withdraw-amount"

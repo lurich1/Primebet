@@ -8,7 +8,7 @@ import {
   findBetByCode,
   generateUniqueCode,
 } from '@/lib/bets-store'
-import { creditBalance, debitBalance } from '@/lib/users-store'
+import { creditBalance, debitBalance, findUserById } from '@/lib/users-store'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import type { BetSelection, PlacedBet } from '@/lib/types'
 
@@ -88,6 +88,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid odds' }, { status: 400 })
   }
 
+  // Look up the user first so we can stamp the bet with their wallet currency.
+  const userBefore = await findUserById(cleanUserId)
+  if (!userBefore) {
+    return NextResponse.json({ error: 'user not found' }, { status: 404 })
+  }
+
   // Atomically pull the stake off the user's balance before persisting the
   // bet. If balance is too low, reject with a clear message.
   const debit = await debitBalance(cleanUserId, stakeNum)
@@ -109,6 +115,7 @@ export async function POST(request: Request) {
     stake: stakeNum,
     totalOdds: +totalOdds.toFixed(4),
     potentialWin: +(stakeNum * totalOdds).toFixed(2),
+    currency: userBefore.currency,
     status: 'pending',
     selections,
   }

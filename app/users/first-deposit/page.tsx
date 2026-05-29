@@ -9,13 +9,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
-
-const MIN_FIRST_DEPOSIT = 200
+import {
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  getCountry,
+  getMinFirstDeposit,
+  isCountryCode,
+  isCurrencyCode,
+  type CountryCode,
+  type CurrencyCode,
+} from '@/lib/countries'
 
 interface UserProfile {
   id: string
   name: string
   email?: string
+  country?: string
+  currency?: string
   totalDeposited: number
   totalWithdrawn: number
   balance: number
@@ -28,8 +38,9 @@ function DepositForm() {
   const userId = params.get('userId') ?? ''
   const moolreStatus = params.get('moolre')
   const moolreReason = params.get('reason')
+  const paystackStatus = params.get('paystack')
 
-  const [amount, setAmount] = useState('200')
+  const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -61,22 +72,39 @@ function DepositForm() {
     }
   }, [userId])
 
-  // Handle the redirect back from Moolre. On success we save the session
-  // and flip the page to the success card; on failure we surface the
+  // Handle the redirect back from Moolre / Paystack. On success we save the
+  // session and flip the page to the success card; on failure we surface the
   // reason (without clearing the form).
   useEffect(() => {
-    if (!moolreStatus) return
-    if (moolreStatus === 'success') {
+    if (moolreStatus === 'success' || paystackStatus === 'success' || paystackStatus === 'already-credited') {
       if (userId) saveUserSession(userId)
       setShowSuccess(true)
-    } else if (moolreStatus === 'failed') {
+      return
+    }
+    if (moolreStatus === 'failed') {
       setError(
         moolreReason
           ? `Payment failed: ${moolreReason}`
           : 'Payment failed. Try again or contact support.',
       )
+      return
     }
-  }, [moolreStatus, moolreReason, userId])
+    if (paystackStatus && paystackStatus !== 'success' && paystackStatus !== 'already-credited') {
+      setError(`Payment did not complete (${paystackStatus}). Try again or contact support.`)
+    }
+  }, [moolreStatus, moolreReason, paystackStatus, userId])
+
+  // Country / currency derived from the loaded profile, with safe defaults.
+  const country: CountryCode = isCountryCode(profile?.country) ? profile!.country as CountryCode : DEFAULT_COUNTRY
+  const currency: CurrencyCode = isCurrencyCode(profile?.currency) ? profile!.currency as CurrencyCode : DEFAULT_CURRENCY
+  const countryCfg = getCountry(country)
+  const minAmount = getMinFirstDeposit(country)
+  const gateway = countryCfg.gateway
+
+  // Seed the amount input with the country's min once the profile loads.
+  useEffect(() => {
+    if (!amount && profile) setAmount(String(minAmount))
+  }, [profile, minAmount, amount])
 
   const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess
   const headingTitle = showSuccess
@@ -84,7 +112,6 @@ function DepositForm() {
     : isReturning
       ? 'Add funds to your wallet'
       : 'Make your first deposit'
-  const minAmount = MIN_FIRST_DEPOSIT
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,7 +126,7 @@ function DepositForm() {
       return
     }
     if (amt < minAmount) {
-      setError(`Minimum deposit is GHS ${minAmount.toFixed(2)}.`)
+      setError(`Minimum deposit is ${currency} ${minAmount.toFixed(2)}.`)
       return
     }
     if (!profile) {
@@ -109,7 +136,10 @@ function DepositForm() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/payments/moolre/start', {
+      const endpoint = gateway === 'moolre'
+        ? '/api/payments/moolre/start'
+        : '/api/payments/paystack/start'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -123,8 +153,9 @@ function DepositForm() {
       if (!res.ok || !data.url) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      // Full-page redirect to Moolre's hosted checkout. The user will pay
-      // on Moolre's page and be sent back to /users/first-deposit?moolre=…
+      // Full-page redirect to the gateway's hosted checkout. The user pays
+      // on their page and is sent back to /users/first-deposit?moolre=… or
+      // ?paystack=… depending on the gateway.
       window.location.href = data.url as string
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -168,11 +199,11 @@ function DepositForm() {
                 <div className="bg-secondary rounded-lg p-4 text-left space-y-2">
                   <Row
                     label="Total deposited"
-                    value={`GHS ${formatMoney(profile.totalDeposited)}`}
+                    value={`${currency} ${formatMoney(profile.totalDeposited, currency)}`}
                   />
                   <Row
                     label="New balance"
-                    value={`GHS ${formatMoney(profile.balance)}`}
+                    value={`${currency} ${formatMoney(profile.balance, currency)}`}
                     tone="good"
                     bold
                   />
@@ -204,7 +235,7 @@ function DepositForm() {
                         Balance
                       </p>
                       <p className="text-sm font-bold text-foreground tabular-nums">
-                        GHS {formatMoney(profile.balance)}
+                        {currency} {formatMoney(profile.balance, currency)}
                       </p>
                     </div>
                   </div>
@@ -221,15 +252,17 @@ function DepositForm() {
                   </div>
                   <h1 className="text-2xl font-bold text-foreground">{headingTitle}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pay with MTN, Telecel or AT Money on Moolre.
-                    Minimum deposit: GHS {MIN_FIRST_DEPOSIT}.
+                    {gateway === 'moolre'
+                      ? 'Pay with MTN, Telecel or AT Money on Moolre.'
+                      : `Pay with card or bank on Paystack (${countryCfg.name}).`}
+                    {' '}Minimum deposit: {currency} {minAmount}.
                   </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
-                      Amount (GHS)
+                      Amount ({currency})
                     </label>
                     <Input
                       type="number"
@@ -244,20 +277,22 @@ function DepositForm() {
                   </div>
 
                   <div className="flex gap-2 flex-wrap">
-                    {['200', '300', '500', '1000'].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setAmount(preset)}
-                        className={`flex-1 min-w-[60px] py-2 rounded-md text-sm font-medium transition-colors ${
-                          amount === preset
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                    {[minAmount, minAmount * 1.5, minAmount * 2.5, minAmount * 5]
+                      .map((n) => Math.round(n).toString())
+                      .map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setAmount(preset)}
+                          className={`flex-1 min-w-[60px] py-2 rounded-md text-sm font-medium transition-colors ${
+                            amount === preset
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-secondary text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
                   </div>
 
                   {error && (
@@ -270,8 +305,10 @@ function DepositForm() {
                   <div className="p-3 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
                     <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                     <span>
-                      You&apos;ll be redirected to Moolre to pay. Your balance
-                      is credited within a few minutes of payment — check{' '}
+                      You&apos;ll be redirected to {gateway === 'moolre' ? 'Moolre' : 'Paystack'} to pay.
+                      {gateway === 'moolre'
+                        ? ' Your balance is credited within a few minutes of payment — check '
+                        : ' Your balance is credited automatically once the payment confirms — check '}
                       <strong>My Account</strong> after.
                     </span>
                   </div>
@@ -287,12 +324,12 @@ function DepositForm() {
                         Redirecting…
                       </>
                     ) : (
-                      `Pay GHS ${Number(amount || 0).toFixed(2)}`
+                      `Pay ${currency} ${Number(amount || 0).toFixed(2)}`
                     )}
                   </Button>
 
                   <p className="text-center text-[11px] text-muted-foreground">
-                    Secured by Moolre · You can deposit later from your account
+                    Secured by {gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account
                   </p>
                 </form>
               </>

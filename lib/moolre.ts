@@ -1,4 +1,4 @@
-// Moolre POS (hosted payment page) flow.
+// Moolre POS (hosted payment page) flow — Ghana only.
 //
 // Earlier we tried Moolre's `embed/src/start` API directly — that route
 // requires a server-issued public key + merchant account number, both of
@@ -14,14 +14,26 @@
 //
 // We still record a `pending` payments row at /start so the admin can see
 // the user's intent (who, how much, when) and credit them on confirmation.
+//
+// Non-Ghana users hit the Paystack flow instead — see lib/paystack.ts.
+
+import { getMinFirstDeposit as countryMinFirstDeposit } from '@/lib/countries'
 
 export function getMoolrePosUrl(): string | null {
   const url = process.env.MOOLRE_POS_URL?.trim()
   return url || null
 }
 
+/**
+ * Ghana-only minimum first deposit. Other countries should call
+ * `getMinFirstDeposit(country)` from `lib/countries.ts` directly.
+ *
+ * Kept as a thin wrapper for the existing call sites in the Moolre flow.
+ */
 export function getMinFirstDeposit(): number {
+  // Env var MIN_FIRST_DEPOSIT (legacy, no country suffix) still overrides GH.
   const raw = process.env.MIN_FIRST_DEPOSIT
   const n = Number(raw)
-  return Number.isFinite(n) && n > 0 ? n : 200
+  if (Number.isFinite(n) && n > 0) return n
+  return countryMinFirstDeposit('GH')
 }

@@ -18,6 +18,8 @@ export async function GET(
     id: user.id,
     name: user.name,
     email: user.email,
+    country: user.country,
+    currency: user.currency,
     totalDeposited: user.totalDeposited,
     totalWithdrawn: user.totalWithdrawn ?? 0,
     balance,

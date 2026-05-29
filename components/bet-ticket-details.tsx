@@ -8,8 +8,9 @@ import { hydrateLegacySelection } from '@/lib/bet-slip-utils'
 import { getCountryFlag } from '@/lib/country-flags'
 import { Button } from '@/components/ui/button'
 
-const formatMoney = (n: number) =>
-  n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+import { formatMoney as fmtMoney } from '@/lib/format-money'
+
+const formatMoney = (n: number, currency?: string) => fmtMoney(n, currency)
 
 interface BetTicketDetailsProps {
   bet: PlacedBet
@@ -52,6 +53,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
     minute: '2-digit',
   })
   const ticketId = bet.code
+  const cur = bet.currency ?? 'GHS'
   // 17-character alphanumeric verification code, deterministic per bet.
   // Derived from the bet UUID for entropy + padded with the public code
   // so collisions can't happen even with weird IDs.
@@ -61,7 +63,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
   const shareWin = () => {
     void navigator.share?.({
       title: 'Prime Bet — Won!',
-      text: `Just won GHS ${formatMoney(totalReturn)} on Prime Bet (ticket ${ticketId})`,
+      text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on Prime Bet (ticket ${ticketId})`,
     })
   }
 
@@ -92,7 +94,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
               YOU WON
             </p>
             <p className="mt-2 text-3xl sm:text-4xl font-bold text-white tabular-nums drop-shadow-md">
-              GHS {formatMoney(totalReturn)}
+              {cur} {formatMoney(totalReturn, cur)}
             </p>
           </div>
 
@@ -202,17 +204,17 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                 won ? 'text-success' : 'text-white'
               }`}
             >
-              {won ? formatMoney(totalReturn) : '0.00'}
+              {won ? formatMoney(totalReturn, cur) : '0.00'}
             </p>
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3 space-y-1 text-sm">
-            <SummaryRow label="Total Stake" value={formatMoney(bet.stake)} />
+            <SummaryRow label="Total Stake" value={formatMoney(bet.stake, cur)} />
             <SummaryRow label="Total Odds" value={bet.totalOdds.toFixed(2)} />
             {won && (
               <SummaryRow
                 label="Potential Win"
-                value={formatMoney(bet.potentialWin)}
+                value={formatMoney(bet.potentialWin, cur)}
               />
             )}
           </div>
@@ -247,7 +249,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                 onClick={() => {
                   void navigator.share?.({
                     title: 'Prime Bet — Won!',
-                    text: `Just won GHS ${formatMoney(totalReturn)} on Prime Bet (ticket ${ticketId})`,
+                    text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on Prime Bet (ticket ${ticketId})`,
                   })
                 }}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-black font-bold text-[11px] shrink-0"

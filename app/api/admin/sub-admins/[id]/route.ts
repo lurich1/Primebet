@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
-import { deleteSubAdmin, updateSubAdmin } from '@/lib/sub-admins-store'
+import {
+  clearCommissionBalance,
+  deleteSubAdmin,
+  findSubAdminById,
+  updateSubAdmin,
+} from '@/lib/sub-admins-store'
+import { DEFAULT_CURRENCY, isCurrencyCode } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,29 +27,33 @@ export async function PATCH(request: Request, { params }: Params) {
   const denied = await requireAdmin()
   if (denied) return denied
   const { id } = await params
-  let body: { approved?: boolean; clearCommissionBalance?: boolean }
+  let body: {
+    approved?: boolean
+    clearCommissionBalance?: boolean
+    currency?: string
+  }
   try {
-    body = (await request.json()) as {
-      approved?: boolean
-      clearCommissionBalance?: boolean
-    }
+    body = (await request.json()) as typeof body
   } catch {
     return NextResponse.json({ error: 'invalid json' }, { status: 400 })
   }
 
-  const patch: { approved?: boolean; commissionBalance?: number } = {}
-  if (typeof body.approved === 'boolean') patch.approved = body.approved
-  // Clears the unpaid balance to 0 once the admin has paid the sub-admin
-  // out-of-band. totalCommissionEarned stays intact so the lifetime ledger
-  // is preserved.
-  if (body.clearCommissionBalance === true) patch.commissionBalance = 0
-
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json({ error: 'no valid fields to update' }, { status: 400 })
+  // Approval toggle goes through updateSubAdmin directly.
+  let updated = null as Awaited<ReturnType<typeof updateSubAdmin>>
+  if (typeof body.approved === 'boolean') {
+    updated = await updateSubAdmin(id, { approved: body.approved })
   }
 
-  const updated = await updateSubAdmin(id, patch)
+  // Clears the unpaid balance for one specific currency once the admin has
+  // paid the sub-admin out-of-band. Lifetime totals are preserved.
+  if (body.clearCommissionBalance === true) {
+    const currency = isCurrencyCode(body.currency) ? body.currency : DEFAULT_CURRENCY
+    updated = await clearCommissionBalance(id, currency)
+  }
+
+  if (!updated) updated = await findSubAdminById(id)
   if (!updated) return NextResponse.json({ error: 'not found' }, { status: 404 })
+
   return NextResponse.json({
     subAdmin: {
       id: updated.id,
@@ -52,6 +62,8 @@ export async function PATCH(request: Request, { params }: Params) {
       approved: updated.approved,
       commissionBalance: updated.commissionBalance,
       totalCommissionEarned: updated.totalCommissionEarned,
+      commissionBalances: updated.commissionBalances,
+      totalCommissionEarnedBy: updated.totalCommissionEarnedBy,
     },
   })
 }

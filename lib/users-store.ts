@@ -1,6 +1,15 @@
 import { randomUUID } from 'crypto'
 import type { AppUser, Commission } from '@/lib/types'
 import { supabaseServer } from '@/lib/supabase'
+import {
+  currencyFromCountry,
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  isCountryCode,
+  isCurrencyCode,
+  type CountryCode,
+  type CurrencyCode,
+} from '@/lib/countries'
 
 interface UserRow {
   id: string
@@ -8,7 +17,10 @@ interface UserRow {
   email: string
   password_hash: string
   phone: string | null
+  country: string | null
+  currency: string | null
   ghana_card: string | null
+  kyc_id: string | null
   referred_by_code: string | null
   referred_by_sub_admin_id: string | null
   first_deposit_amount: number
@@ -28,19 +40,25 @@ interface CommissionRow {
   deposit_amount: number
   commission_amount: number
   rate: number
+  currency: string | null
   created_at: string
 }
 
 function rowToUser(row: UserRow): AppUser {
   const step = Number(row.verification_step ?? 0)
   const clamped = (step < 0 ? 0 : step > 2 ? 2 : step) as 0 | 1 | 2
+  const country: CountryCode = isCountryCode(row.country) ? row.country : DEFAULT_COUNTRY
+  const currency: CurrencyCode = isCurrencyCode(row.currency) ? row.currency : currencyFromCountry(country)
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     passwordHash: row.password_hash,
     phone: row.phone ?? undefined,
+    country,
+    currency,
     ghanaCard: row.ghana_card ?? undefined,
+    kycId: row.kyc_id ?? row.ghana_card ?? undefined,
     referredByCode: row.referred_by_code ?? undefined,
     referredBySubAdminId: row.referred_by_sub_admin_id ?? undefined,
     firstDepositAmount: Number(row.first_deposit_amount),
@@ -98,15 +116,24 @@ export async function findUserById(id: string): Promise<AppUser | null> {
 export async function addUser(
   input: Omit<
     AppUser,
-    'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance' | 'verificationStep'
-  >,
+    'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance' | 'verificationStep' | 'currency'
+  > & { currency?: CurrencyCode },
 ): Promise<AppUser> {
+  const country: CountryCode = isCountryCode(input.country) ? input.country : DEFAULT_COUNTRY
+  const currency: CurrencyCode = input.currency && isCurrencyCode(input.currency)
+    ? input.currency
+    : currencyFromCountry(country)
   const insert = {
     name: input.name,
     email: input.email.trim().toLowerCase(),
     password_hash: input.passwordHash,
     phone: input.phone?.trim() || null,
-    ghana_card: input.ghanaCard?.trim() || null,
+    country,
+    currency,
+    // Mirror KYC into ghana_card too when the user is from Ghana so existing
+    // admin views that still read ghana_card keep working during the rollout.
+    ghana_card: country === 'GH' ? (input.kycId ?? input.ghanaCard ?? null) : null,
+    kyc_id: input.kycId?.trim() || input.ghanaCard?.trim() || null,
     referred_by_code: input.referredByCode ?? null,
     referred_by_sub_admin_id: input.referredBySubAdminId ?? null,
   }
@@ -303,6 +330,7 @@ function rowToCommission(row: CommissionRow): Commission {
     depositAmount: Number(row.deposit_amount),
     commission: Number(row.commission_amount),
     rate: Number(row.rate),
+    currency: isCurrencyCode(row.currency) ? row.currency : DEFAULT_CURRENCY,
     createdAt: row.created_at,
   }
 }
@@ -328,6 +356,7 @@ export async function addCommission(
       deposit_amount: c.depositAmount,
       commission_amount: c.commission,
       rate: c.rate,
+      currency: c.currency,
     })
     .select('*')
     .single()

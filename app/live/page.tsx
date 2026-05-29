@@ -26,6 +26,7 @@ export default function LivePage() {
   const [activeLeague, setActiveLeague] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
+  const [currency, setCurrency] = useState<string>('GHS')
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const { matches, loading, refresh } = useMatches(activeSport)
@@ -61,7 +62,10 @@ export default function LivePage() {
         const res = await fetch(`/api/users/${userId}`, { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setBalance(typeof data.balance === 'number' ? data.balance : 0)
+        if (!cancelled) {
+          setBalance(typeof data.balance === 'number' ? data.balance : 0)
+          if (typeof data.currency === 'string') setCurrency(data.currency)
+        }
       } catch {
         /* ignore */
       }
@@ -143,7 +147,7 @@ export default function LivePage() {
                     <Wallet className="w-4 h-4 text-[#2ecc71]" />
                     <span className="text-xs text-muted-foreground">Balance</span>
                     <span className="text-sm font-bold text-foreground tabular-nums">
-                      {balance === null ? '—' : `GHS ${formatMoney(balance)}`}
+                      {balance === null ? '—' : `${currency} ${formatMoney(balance, currency)}`}
                     </span>
                   </Link>
                   <Link href="/me" className="md:hidden">

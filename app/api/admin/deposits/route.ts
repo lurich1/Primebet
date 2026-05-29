@@ -56,6 +56,8 @@ export async function GET() {
             name: u.name,
             email: u.email,
             phone: u.phone ?? null,
+            country: u.country,
+            currency: u.currency,
             totalDeposited: u.totalDeposited,
             balance: u.balance ?? 0,
           }
@@ -70,6 +72,7 @@ export async function GET() {
       userId: string
       name: string
       email: string
+      currency: string
       depositCount: number
       depositTotal: number
       lastDepositAt: string
@@ -88,6 +91,7 @@ export async function GET() {
         userId: d.user.id,
         name: d.user.name,
         email: d.user.email,
+        currency: d.user.currency ?? d.currency,
         depositCount: 1,
         depositTotal: d.amount,
         lastDepositAt: d.createdAt,
@@ -99,15 +103,23 @@ export async function GET() {
     a.lastDepositAt < b.lastDepositAt ? 1 : -1,
   )
 
+  // Per-currency totals so the dashboard can show distinct rows for each
+  // wallet currency instead of summing GHS+NGN+KES+ZAR into nonsense.
+  const successAmountByCurrency: Record<string, number> = {}
+  let successCount = 0
+  for (const d of deposits) {
+    if (d.status !== 'success') continue
+    successCount += 1
+    const cur = d.currency || 'GHS'
+    successAmountByCurrency[cur] = +((successAmountByCurrency[cur] ?? 0) + d.amount).toFixed(2)
+  }
+
   return NextResponse.json({
     deposits,
     userRollup,
     totals: {
-      successCount: deposits.filter((d) => d.status === 'success').length,
-      successAmount: +deposits
-        .filter((d) => d.status === 'success')
-        .reduce((s, d) => s + d.amount, 0)
-        .toFixed(2),
+      successCount,
+      successAmountByCurrency,
     },
   })
 }

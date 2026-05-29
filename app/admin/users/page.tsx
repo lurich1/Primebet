@@ -20,6 +20,8 @@ interface AdminUserRow {
   name: string
   email: string
   phone: string | null
+  country?: string
+  currency?: string
   verificationStep: 0 | 1 | 2
   withdrawalApproved: boolean
   balance: number
@@ -115,7 +117,7 @@ export default function AdminPlayersPage() {
   const submitCredit = async (userId: string) => {
     const amount = Number(creditAmount)
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Enter a positive amount in GHS.')
+      setError('Enter a positive amount in the user’s currency.')
       return
     }
     setCreditSubmitting(true)
@@ -173,7 +175,7 @@ export default function AdminPlayersPage() {
         <p className="text-sm text-muted-foreground">
           Every registered user. Use <strong>Credit</strong> to top up a
           balance manually (e.g. when Moolre failed but the user paid).
-          Withdrawal approval requires verification (both 200 GHS deposits)
+          Withdrawal approval requires verification (both qualifying deposits)
           and a manual <strong>Approve</strong>.
         </p>
       </div>
@@ -256,11 +258,11 @@ export default function AdminPlayersPage() {
                       )}
                     </p>
                     <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 tabular-nums">
-                      <span>Balance: GHS {formatMoney(u.balance)}</span>
+                      <span>Balance: {u.currency ?? 'GHS'} {formatMoney(u.balance, u.currency)}</span>
                       <span className="text-border">·</span>
-                      <span>Deposited: GHS {formatMoney(u.totalDeposited)}</span>
+                      <span>Deposited: {u.currency ?? 'GHS'} {formatMoney(u.totalDeposited, u.currency)}</span>
                       <span className="text-border">·</span>
-                      <span>Withdrawn: GHS {formatMoney(u.totalWithdrawn)}</span>
+                      <span>Withdrawn: {u.currency ?? 'GHS'} {formatMoney(u.totalWithdrawn, u.currency)}</span>
                       <span className="text-border">·</span>
                       <span>Joined {formatJoined(u.createdAt)}</span>
                       {u.firstDepositAt ? (
@@ -291,7 +293,7 @@ export default function AdminPlayersPage() {
                     {u.verificationStep < 2 ? (
                       <span
                         className="text-[11px] text-muted-foreground"
-                        title="Player hasn't completed both 200 GHS verification deposits yet."
+                        title="Player hasn't completed both qualifying verification deposits yet."
                       >
                         Awaiting verification
                       </span>
@@ -336,7 +338,7 @@ export default function AdminPlayersPage() {
                   <div className="mt-3 p-3 rounded-lg border border-primary/30 bg-primary/5 flex flex-col sm:flex-row sm:items-end gap-2">
                     <div className="flex-1 min-w-0">
                       <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">
-                        Amount (GHS)
+                        Amount ({u.currency ?? 'GHS'})
                       </label>
                       <Input
                         type="number"

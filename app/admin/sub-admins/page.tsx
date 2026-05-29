@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatMoney } from '@/lib/format-money'
 
 interface SubAdminRow {
   id: string
@@ -21,23 +22,25 @@ interface SubAdminRow {
   createdAt: string
   commissionBalance: number
   totalCommissionEarned: number
+  commissionBalances: Record<string, number>
+  totalCommissionEarnedBy: Record<string, number>
   referrals: number
   withDeposit: number
   commissionsCount: number
 }
 
 interface PlatformTotals {
-  referredDeposits: number
-  subAdminShare: number
-  adminShare: number
+  referredDepositsByCurrency: Record<string, number>
+  subAdminShareByCurrency: Record<string, number>
+  adminShareByCurrency: Record<string, number>
 }
 
 export default function AdminSubAdminsPage() {
   const [rows, setRows] = useState<SubAdminRow[]>([])
   const [platform, setPlatform] = useState<PlatformTotals>({
-    referredDeposits: 0,
-    subAdminShare: 0,
-    adminShare: 0,
+    referredDepositsByCurrency: {},
+    subAdminShareByCurrency: {},
+    adminShareByCurrency: {},
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -103,11 +106,11 @@ export default function AdminSubAdminsPage() {
     }
   }
 
-  const handleMarkPaid = async (row: SubAdminRow) => {
-    if (row.commissionBalance <= 0) return
+  const handleMarkPaid = async (row: SubAdminRow, currency: string, amount: number) => {
+    if (amount <= 0) return
     if (
       !confirm(
-        `Mark GHS ${row.commissionBalance.toFixed(2)} as paid to "${row.name}"? This clears their unpaid balance to 0. Lifetime earnings stay on record.`,
+        `Mark ${currency} ${formatMoney(amount, currency)} as paid to "${row.name}"? This clears their ${currency} balance to 0. Lifetime earnings stay on record.`,
       )
     ) {
       return
@@ -117,11 +120,22 @@ export default function AdminSubAdminsPage() {
       const res = await fetch(`/api/admin/sub-admins/${row.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ clearCommissionBalance: true }),
+        body: JSON.stringify({ clearCommissionBalance: true, currency }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setRows((prev) =>
-        prev.map((r) => (r.id === row.id ? { ...r, commissionBalance: 0 } : r)),
+        prev.map((r) => {
+          if (r.id !== row.id) return r
+          const balances = { ...(r.commissionBalances ?? {}) }
+          balances[currency] = 0
+          // Mirror the legacy scalar when clearing GHS, so existing UIs still
+          // reflect the change without a refresh.
+          return {
+            ...r,
+            commissionBalances: balances,
+            commissionBalance: currency === 'GHS' ? 0 : r.commissionBalance,
+          }
+        }),
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -154,11 +168,27 @@ export default function AdminSubAdminsPage() {
     (acc, r) => ({
       referrals: acc.referrals + r.referrals,
       deposits: acc.deposits + r.withDeposit,
-      paid: acc.paid + r.totalCommissionEarned,
-      outstanding: acc.outstanding + r.commissionBalance,
     }),
-    { referrals: 0, deposits: 0, paid: 0, outstanding: 0 },
+    { referrals: 0, deposits: 0 },
   )
+
+  // Outstanding payouts grouped by currency, summed across all sub-admins.
+  const outstandingByCurrency: Record<string, number> = {}
+  for (const r of rows) {
+    for (const [cur, amt] of Object.entries(r.commissionBalances ?? {})) {
+      if (!amt) continue
+      outstandingByCurrency[cur] = +(((outstandingByCurrency[cur] ?? 0) + amt)).toFixed(2)
+    }
+  }
+
+  const currenciesInPlay = Array.from(
+    new Set([
+      ...Object.keys(platform.referredDepositsByCurrency),
+      ...Object.keys(platform.subAdminShareByCurrency),
+      ...Object.keys(platform.adminShareByCurrency),
+      ...Object.keys(outstandingByCurrency),
+    ]),
+  ).sort()
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl">
@@ -178,25 +208,45 @@ export default function AdminSubAdminsPage() {
       </div>
 
       {/* Money split — every referred-user deposit splits 60/40 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Tile
-          label="Referred deposits (GHS)"
-          value={platform.referredDeposits.toFixed(2)}
-        />
-        <Tile
-          label="Sub-admin share 60% (GHS)"
-          value={platform.subAdminShare.toFixed(2)}
-        />
-        <Tile
-          label="Admin share 40% (GHS)"
-          value={platform.adminShare.toFixed(2)}
-          highlight
-        />
-        <Tile
-          label="Outstanding payouts (GHS)"
-          value={totals.outstanding.toFixed(2)}
-        />
-      </div>
+      {currenciesInPlay.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No referred deposits yet.</p>
+      ) : (
+        <div className="bg-card border border-border rounded-xl p-3 overflow-x-auto">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold mb-2">
+            Money split by currency
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <th className="text-left font-semibold py-1">Currency</th>
+                <th className="text-right font-semibold py-1">Referred deposits</th>
+                <th className="text-right font-semibold py-1">Sub-admin 60%</th>
+                <th className="text-right font-semibold py-1">Admin 40%</th>
+                <th className="text-right font-semibold py-1">Outstanding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currenciesInPlay.map((cur) => (
+                <tr key={cur} className="border-t border-border">
+                  <td className="py-1.5 font-semibold">{cur}</td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {formatMoney(platform.referredDepositsByCurrency[cur] ?? 0, cur)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {formatMoney(platform.subAdminShareByCurrency[cur] ?? 0, cur)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-success">
+                    {formatMoney(platform.adminShareByCurrency[cur] ?? 0, cur)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {formatMoney(outstandingByCurrency[cur] ?? 0, cur)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -267,28 +317,51 @@ export default function AdminSubAdminsPage() {
                     <span className="md:hidden text-muted-foreground text-xs mr-1">Deps:</span>
                     {r.withDeposit}
                   </p>
-                  <p className="md:text-right text-sm font-semibold tabular-nums text-success">
+                  <div className="md:text-right text-sm font-semibold tabular-nums text-success space-y-0.5">
                     <span className="md:hidden text-muted-foreground text-xs mr-1">Bal:</span>
-                    {r.commissionBalance.toFixed(2)}
-                  </p>
-                  <p className="md:text-right text-sm tabular-nums">
-                    <span className="md:hidden text-muted-foreground text-xs mr-1">Earned:</span>
-                    {r.totalCommissionEarned.toFixed(2)}
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    {r.commissionBalance > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleMarkPaid(r)}
-                        disabled={busy.has(r.id)}
-                        className="h-7 px-2 text-xs gap-1 text-success border-success/40 hover:bg-success/10"
-                        title={`Mark GHS ${r.commissionBalance.toFixed(2)} as paid`}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Mark paid</span>
-                      </Button>
+                    {Object.entries(r.commissionBalances ?? {}).filter(([, v]) => v > 0).length === 0 ? (
+                      <span className="text-muted-foreground font-normal">—</span>
+                    ) : (
+                      Object.entries(r.commissionBalances ?? {})
+                        .filter(([, v]) => v > 0)
+                        .map(([cur, amt]) => (
+                          <div key={cur}>
+                            {cur} {formatMoney(amt, cur)}
+                          </div>
+                        ))
                     )}
+                  </div>
+                  <div className="md:text-right text-sm tabular-nums space-y-0.5">
+                    <span className="md:hidden text-muted-foreground text-xs mr-1">Earned:</span>
+                    {Object.entries(r.totalCommissionEarnedBy ?? {}).filter(([, v]) => v > 0).length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      Object.entries(r.totalCommissionEarnedBy ?? {})
+                        .filter(([, v]) => v > 0)
+                        .map(([cur, amt]) => (
+                          <div key={cur}>
+                            {cur} {formatMoney(amt, cur)}
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {Object.entries(r.commissionBalances ?? {})
+                      .filter(([, amt]) => amt > 0)
+                      .map(([cur, amt]) => (
+                        <Button
+                          key={cur}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMarkPaid(r, cur, amt)}
+                          disabled={busy.has(r.id)}
+                          className="h-7 px-2 text-xs gap-1 text-success border-success/40 hover:bg-success/10"
+                          title={`Mark ${cur} ${formatMoney(amt, cur)} as paid`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Paid {cur}</span>
+                        </Button>
+                      ))}
                     <Button
                       size="sm"
                       variant="outline"

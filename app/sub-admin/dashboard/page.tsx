@@ -15,6 +15,15 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { formatMoney } from '@/lib/format-money'
+
+/** "GHS 12.34 · NGN 5,000.00" — single-line summary of a currency map. */
+function formatCurrencyMap(map: Record<string, number> | undefined): string {
+  if (!map) return '—'
+  const entries = Object.entries(map).filter(([, v]) => v > 0)
+  if (entries.length === 0) return '—'
+  return entries.map(([cur, amt]) => `${cur} ${formatMoney(amt, cur)}`).join(' · ')
+}
 
 interface MeResponse {
   subAdmin: {
@@ -25,6 +34,8 @@ interface MeResponse {
     approved: boolean
     commissionBalance: number
     totalCommissionEarned: number
+    commissionBalances: Record<string, number>
+    totalCommissionEarnedBy: Record<string, number>
     createdAt: string
   }
   stats: {
@@ -37,6 +48,7 @@ interface MeResponse {
     id: string
     name: string
     email: string
+    currency: string
     createdAt: string
     firstDepositAmount: number
     firstDepositAt?: string
@@ -47,6 +59,7 @@ interface MeResponse {
     userId: string
     depositAmount: number
     commission: number
+    currency: string
     rate: number
     createdAt: string
   }[]
@@ -245,14 +258,14 @@ export default function SubAdminDashboardPage() {
           <Kpi
             icon={<Wallet className="w-4 h-4 text-success" />}
             label="Balance"
-            value={sa.commissionBalance.toFixed(2)}
+            value={formatCurrencyMap(sa.commissionBalances)}
             sub="unpaid commission"
             tone="good"
           />
           <Kpi
             icon={<Wallet className="w-4 h-4 text-muted-foreground" />}
             label="All time earned"
-            value={sa.totalCommissionEarned.toFixed(2)}
+            value={formatCurrencyMap(sa.totalCommissionEarnedBy)}
             sub={`${data.stats.commissionsCount} payouts`}
           />
         </section>
@@ -299,21 +312,21 @@ export default function SubAdminDashboardPage() {
                         <div className="md:text-right">
                           {u.firstDepositAt ? (
                             <p className="text-sm font-bold tabular-nums">
-                              {u.firstDepositAmount.toFixed(2)}
+                              {u.currency} {formatMoney(u.firstDepositAmount, u.currency)}
                             </p>
                           ) : (
                             <span className="text-xs text-muted-foreground">Pending</span>
                           )}
                         </div>
                         <p className="md:text-right text-sm tabular-nums">
-                          {u.totalDeposited.toFixed(2)}
+                          {u.currency} {formatMoney(u.totalDeposited, u.currency)}
                         </p>
                         <p
                           className={`md:text-right text-sm font-bold tabular-nums ${
                             cm ? 'text-success' : 'text-muted-foreground'
                           }`}
                         >
-                          {cm ? `+${cm.commission.toFixed(2)}` : '—'}
+                          {cm ? `+${cm.currency} ${formatMoney(cm.commission, cm.currency)}` : '—'}
                         </p>
                       </div>
                     </li>

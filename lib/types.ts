@@ -91,8 +91,14 @@ export interface SubAdmin {
   referralCode: string
   approved: boolean
   createdAt: string
+  /** Legacy GHS-only scalar (kept for back-compat reads). */
   commissionBalance: number
+  /** Legacy GHS-only scalar (kept for back-compat reads). */
   totalCommissionEarned: number
+  /** Per-currency balances. The application reads/writes these as authoritative. */
+  commissionBalances: Partial<Record<'GHS' | 'NGN' | 'KES' | 'ZAR', number>>
+  /** Per-currency lifetime totals. */
+  totalCommissionEarnedBy: Partial<Record<'GHS' | 'NGN' | 'KES' | 'ZAR', number>>
 }
 
 export interface AppUser {
@@ -101,8 +107,14 @@ export interface AppUser {
   email: string
   passwordHash: string
   phone?: string
-  /** Ghana Card number in canonical form: GHA-XXXXXXXXX-X. */
+  /** ISO country code: 'GH' | 'NG' | 'KE' | 'ZA'. */
+  country: 'GH' | 'NG' | 'KE' | 'ZA'
+  /** Wallet currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'. Mirrors country. */
+  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
+  /** Ghana Card number (legacy column; only populated for GH users). */
   ghanaCard?: string
+  /** Country-specific KYC value: Ghana Card, BVN/NIN, Kenyan/SA national ID. */
+  kycId?: string
   referredByCode?: string
   referredBySubAdminId?: string
   firstDepositAmount: number
@@ -122,6 +134,7 @@ export interface Commission {
   depositAmount: number
   commission: number
   rate: number
+  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
   createdAt: string
 }
 
@@ -135,6 +148,7 @@ export interface PlacedBet {
   stake: number
   totalOdds: number
   potentialWin: number
+  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
   status: 'pending' | 'won' | 'lost'
   selections: BetSelection[]
   settledAt?: string

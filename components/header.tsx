@@ -13,6 +13,7 @@ export function Header() {
   const [isDark, setIsDark] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
+  const [currency, setCurrency] = useState<string>('GHS')
 
   useEffect(() => {
     setUserId(getUserId())
@@ -30,7 +31,10 @@ export function Header() {
         const res = await fetch(`/api/users/${userId}`, { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setBalance(typeof data.balance === 'number' ? data.balance : 0)
+        if (!cancelled) {
+          setBalance(typeof data.balance === 'number' ? data.balance : 0)
+          if (typeof data.currency === 'string') setCurrency(data.currency)
+        }
       } catch {
         /* ignore */
       }
@@ -122,7 +126,7 @@ export function Header() {
                   <Wallet className="w-4 h-4 text-[#2ecc71]" />
                   <span className="text-xs text-muted-foreground">Balance</span>
                   <span className="text-sm font-bold text-foreground tabular-nums">
-                    {balance === null ? '—' : `GHS ${formatMoney(balance)}`}
+                    {balance === null ? '—' : `${currency} ${formatMoney(balance, currency)}`}
                   </span>
                 </Link>
                 <Link href={depositHref} className="hidden sm:block">

@@ -2,16 +2,17 @@ import { NextResponse } from 'next/server'
 import { addUser, findUserByEmail } from '@/lib/users-store'
 import { findSubAdminByReferralCode } from '@/lib/sub-admins-store'
 import { hashPassword } from '@/lib/password'
+import {
+  currencyFromCountry,
+  DEFAULT_COUNTRY,
+  getCountry,
+  isCountryCode,
+  normalizeKyc,
+  normalizePhone,
+  type CountryCode,
+} from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
-
-// Canonical Ghana Card format: GHA-XXXXXXXXX-X (3 letters + 9 digits + 1 check digit).
-// Accept input with or without hyphens, in any case, then normalize.
-function normalizeGhanaCard(raw: string): string | null {
-  const stripped = raw.toUpperCase().replace(/[\s-]/g, '')
-  if (!/^GHA\d{10}$/.test(stripped)) return null
-  return `${stripped.slice(0, 3)}-${stripped.slice(3, 12)}-${stripped.slice(12)}`
-}
 
 export async function POST(request: Request) {
   let body: {
@@ -19,6 +20,10 @@ export async function POST(request: Request) {
     email?: string
     password?: string
     phone?: string
+    country?: string
+    /** Country-specific KYC value (Ghana Card, BVN/NIN, Kenyan/SA ID). */
+    kyc?: string
+    /** Legacy alias kept so older clients still work for Ghana signups. */
     ghanaCard?: string
     referralCode?: string
   }
@@ -32,28 +37,34 @@ export async function POST(request: Request) {
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
   const referralCode = (body.referralCode ?? '').trim().toUpperCase()
-  // Normalise phone to 10-digit local format. Required at signup.
-  let phone = (body.phone ?? '').replace(/\s|-/g, '')
-  if (phone.startsWith('+233')) phone = '0' + phone.slice(4)
-  else if (phone.startsWith('233')) phone = '0' + phone.slice(3)
-  if (!/^0\d{9}$/.test(phone)) {
+  const countryInput = (body.country ?? DEFAULT_COUNTRY).toString().toUpperCase()
+
+  if (!isCountryCode(countryInput)) {
     return NextResponse.json(
-      { error: 'phone must be a 10-digit number starting with 0' },
+      { error: 'country must be one of GH, NG, KE, ZA' },
+      { status: 400 },
+    )
+  }
+  const country: CountryCode = countryInput
+  const cfg = getCountry(country)
+
+  const phone = normalizePhone(country, body.phone ?? '')
+  if (!phone) {
+    return NextResponse.json(
+      { error: `phone must be a valid ${cfg.name} number` },
       { status: 400 },
     )
   }
 
-  const ghanaCard = normalizeGhanaCard(body.ghanaCard ?? '')
-  if (!ghanaCard) {
-    return NextResponse.json(
-      { error: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)' },
-      { status: 400 },
-    )
+  const rawKyc = (body.kyc ?? body.ghanaCard ?? '').toString()
+  const kycId = normalizeKyc(country, rawKyc)
+  if (!kycId) {
+    return NextResponse.json({ error: cfg.kycError }, { status: 400 })
   }
 
-  if (!name || !email || !password || !phone) {
+  if (!name || !email || !password) {
     return NextResponse.json(
-      { error: 'name, email, phone, Ghana Card, and password are required' },
+      { error: 'name, email, phone, KYC, and password are required' },
       { status: 400 },
     )
   }
@@ -95,8 +106,13 @@ export async function POST(request: Request) {
     name,
     email,
     passwordHash: hashPassword(password),
-    phone: phone || undefined,
-    ghanaCard,
+    phone,
+    country,
+    currency: currencyFromCountry(country),
+    kycId,
+    // Maintain the dedicated ghanaCard column for GH users so existing admin
+    // tooling that still reads `ghana_card` continues to display the value.
+    ghanaCard: country === 'GH' ? kycId : undefined,
     referredByCode: validatedReferralCode,
     referredBySubAdminId,
   })
@@ -107,6 +123,8 @@ export async function POST(request: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
+        country: user.country,
+        currency: user.currency,
         referredByCode: user.referredByCode,
         hasFirstDeposit: !!user.firstDepositAt,
       },

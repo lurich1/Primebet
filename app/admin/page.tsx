@@ -5,10 +5,10 @@ import Link from 'next/link'
 import {
   Receipt,
   TrendingUp,
-  TrendingDown,
   Loader2,
   ArrowRight,
 } from 'lucide-react'
+import { formatMoney } from '@/lib/format-money'
 
 interface StatsResponse {
   counts: { total: number; open: number; won: number; lost: number; users: number }
@@ -18,8 +18,10 @@ interface StatsResponse {
     settledStake: number
     totalReturns: number
     netPL: number
-    totalUserDeposits: number
-    totalUserWithdrawals: number
+    depositsByCurrency: Record<string, number>
+    withdrawalsByCurrency: Record<string, number>
+    stakesByCurrency: Record<string, number>
+    returnsByCurrency: Record<string, number>
   }
   winRate: number
   byDay: { date: string; count: number; stake: number }[]
@@ -93,31 +95,29 @@ export default function AdminOverviewPage() {
         </p>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — counts only; money totals get a per-currency panel below */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi
-          label="Total deposits"
-          value={`GHS ${stats.money.totalUserDeposits.toFixed(2)}`}
-          sub={`across ${stats.counts.users} user${stats.counts.users === 1 ? '' : 's'}`}
-          tone="good"
+          label="Users"
+          value={stats.counts.users.toString()}
           icon={<TrendingUp className="w-4 h-4 text-success" />}
         />
-        <Kpi
-          label="Total withdrawals"
-          value={`GHS ${stats.money.totalUserWithdrawals.toFixed(2)}`}
-          tone="bad"
-          icon={<TrendingDown className="w-4 h-4 text-destructive" />}
-        />
         <Kpi label="Total bets" value={stats.counts.total.toString()} />
-        <Kpi
-          label="Open"
-          value={stats.counts.open.toString()}
-          sub={`${stats.money.openStake.toFixed(2)} at stake`}
-        />
-        <Kpi label="Total staked" value={stats.money.totalStake.toFixed(2)} />
-        <Kpi label="Total returns" value={stats.money.totalReturns.toFixed(2)} tone="good" />
+        <Kpi label="Open" value={stats.counts.open.toString()} />
         <Kpi label="Settled" value={(stats.counts.won + stats.counts.lost).toString()} />
-        <Kpi label="Won bets" value={stats.counts.won.toString()} tone="good" />
+      </div>
+
+      {/* Money by currency — one row per wallet currency */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <h2 className="font-semibold mb-3 flex items-center gap-2">
+          Money by currency
+        </h2>
+        <CurrencyTable
+          deposits={stats.money.depositsByCurrency}
+          withdrawals={stats.money.withdrawalsByCurrency}
+          stakes={stats.money.stakesByCurrency}
+          returns={stats.money.returnsByCurrency}
+        />
       </div>
 
       {/* Chart + Top leagues */}
@@ -236,6 +236,66 @@ export default function AdminOverviewPage() {
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+function CurrencyTable({
+  deposits,
+  withdrawals,
+  stakes,
+  returns: returnsBy,
+}: {
+  deposits: Record<string, number>
+  withdrawals: Record<string, number>
+  stakes: Record<string, number>
+  returns: Record<string, number>
+}) {
+  const currencies = Array.from(
+    new Set([
+      ...Object.keys(deposits),
+      ...Object.keys(withdrawals),
+      ...Object.keys(stakes),
+      ...Object.keys(returnsBy),
+    ]),
+  ).sort()
+  if (currencies.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">No wallet activity yet.</p>
+    )
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <th className="text-left font-semibold py-1">Currency</th>
+            <th className="text-right font-semibold py-1">Deposits</th>
+            <th className="text-right font-semibold py-1">Withdrawals</th>
+            <th className="text-right font-semibold py-1">Stakes</th>
+            <th className="text-right font-semibold py-1">Returns</th>
+          </tr>
+        </thead>
+        <tbody>
+          {currencies.map((cur) => (
+            <tr key={cur} className="border-t border-border">
+              <td className="py-1.5 font-semibold">{cur}</td>
+              <td className="py-1.5 text-right tabular-nums text-success">
+                {formatMoney(deposits[cur] ?? 0, cur)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums text-destructive">
+                {formatMoney(withdrawals[cur] ?? 0, cur)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums">
+                {formatMoney(stakes[cur] ?? 0, cur)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums">
+                {formatMoney(returnsBy[cur] ?? 0, cur)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

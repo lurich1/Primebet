@@ -7,6 +7,7 @@ import { formatMoney } from '@/lib/format-money'
 interface Winner {
   masked: string
   amount: number
+  currency?: string
   settledAt: string
   code: string
 }
@@ -61,7 +62,7 @@ export function WinnersTicker() {
               <span className="font-mono text-muted-foreground">{w.masked}</span>
               <span className="text-muted-foreground">Won</span>
               <span className="font-bold text-success tabular-nums">
-                GHS {formatMoney(w.amount)}
+                {w.currency ?? 'GHS'} {formatMoney(w.amount, w.currency)}
               </span>
             </span>
           ))}

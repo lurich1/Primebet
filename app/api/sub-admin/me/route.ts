@@ -22,6 +22,8 @@ export async function GET() {
       approved: sa.approved,
       commissionBalance: sa.commissionBalance,
       totalCommissionEarned: sa.totalCommissionEarned,
+      commissionBalances: sa.commissionBalances,
+      totalCommissionEarnedBy: sa.totalCommissionEarnedBy,
       createdAt: sa.createdAt,
     },
     stats: {
@@ -34,6 +36,7 @@ export async function GET() {
       id: u.id,
       name: u.name,
       email: u.email,
+      currency: u.currency,
       createdAt: u.createdAt,
       firstDepositAmount: u.firstDepositAmount,
       firstDepositAt: u.firstDepositAt,

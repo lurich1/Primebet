@@ -9,6 +9,7 @@ export interface WinnerEntry {
   /** Sportybet-style masked identifier, e.g. "02*****812" or "JK***DOE". */
   masked: string
   amount: number
+  currency: string
   /** ISO timestamp of when the bet settled. */
   settledAt: string
   /** Bet booking code, useful for tooltips / "View ticket" affordances. */
@@ -19,6 +20,7 @@ interface WinnerRow {
   code: string
   payout: number | string | null
   potential_win: number | string
+  currency: string | null
   settled_at: string | null
   users: { phone: string | null; name: string | null } | null
 }
@@ -50,7 +52,7 @@ export async function GET() {
   const supabase = supabaseServer()
   const { data, error } = await supabase
     .from('bets')
-    .select('code, payout, potential_win, settled_at, users!inner(phone, name)')
+    .select('code, payout, potential_win, currency, settled_at, users!inner(phone, name)')
     .eq('status', 'won')
     .order('payout', { ascending: false, nullsFirst: false })
     .limit(15)
@@ -69,6 +71,7 @@ export async function GET() {
       return {
         masked,
         amount: +amount.toFixed(2),
+        currency: r.currency ?? 'GHS',
         settledAt: r.settled_at ?? new Date().toISOString(),
         code: r.code,
       }

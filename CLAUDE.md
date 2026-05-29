@@ -21,7 +21,8 @@ Use PowerShell on Windows. No test framework is configured.
 - `ODDS_API_KEY` — without it, `/api/matches` returns `customMatches` only with `reason: "ODDS_API_KEY missing"`
 - `ADMIN_PASSWORD` — **unset disables the entire admin section** (proxy returns 503 / redirects to `/admin/login?disabled=1`)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — all server-side stores throw if the URL or service-role key is missing
-- `MOOLRE_PUBLIC_KEY`, `MOOLRE_ACCOUNT_NUMBER`, `MIN_FIRST_DEPOSIT` — Moolre hosted-checkout (server-side only; `MOOLRE_PUBLIC_KEY` is the JWT shown on the Moolre profile page, sent as `X-Api-Pubkey`). `MOOLRE_PRIVATE_KEY` and `MOOLRE_SECRET_KEY` are reserved for the payouts API and webhook-signature verification respectively — not used yet.
+- `MOOLRE_POS_URL`, `MIN_FIRST_DEPOSIT` — Moolre hosted POS link, **Ghana wallets only**. The deposit page sends GH users to this URL; admin reconciles manually via `/admin/deposits`.
+- `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY` — Paystack credentials used for Nigeria / Kenya / South Africa wallets (and any other non-GH user). Optional `NEXT_PUBLIC_APP_URL` overrides the callback origin. Per-country overrides for amounts: `MIN_FIRST_DEPOSIT_<CC>` and `VERIFICATION_AMOUNT_<CC>` (CC ∈ GH/NG/KE/ZA) — defaults come from `lib/countries.ts`.
 
 ## Architecture
 
@@ -92,4 +93,5 @@ The user-facing `/me/transactions` page (and `GET /api/users/[id]/transactions`)
 - shadcn/ui style is `new-york`, base color `neutral`, components under `components/ui/`, lucide icons. Use the existing aliases in `components.json` rather than adding new ones.
 - Tailwind v4 with `@tailwindcss/postcss` — CSS variables in `app/globals.css`, no `tailwind.config.*`.
 - `revalidate = 30` on `/api/matches`, `revalidate = 60` on per-sport Odds API fetches — keep these aligned when adding new match endpoints so the live clock stays close to real time.
-- Money in GHS (Ghana cedis). Moolre's hosted checkout accepts the major-unit amount directly — no pesewa conversion needed.
+- Money is per-user currency: GHS (Ghana), NGN (Nigeria), KES (Kenya), ZAR (South Africa). `users.country` + `users.currency` are set at signup from the country selector in `app/register/page.tsx`. The wallet is denominated in that currency for life — bets, payments, and commission rows all carry the same `currency` column. `lib/countries.ts` is the single source of truth for KYC fields, phone normalisation, payout networks, gateway choice, and the per-country minimum / verification deposit amounts. Moolre is GH-only; everyone else hits Paystack (which expects amounts in the minor unit — `lib/paystack.ts` handles the ×100 conversion).
+- Sub-admin commission balances are per-currency: each row in `sub_admins` carries `commission_balances` and `total_commission_earned_by` JSONB maps keyed by currency. The legacy scalar `commission_balance` / `total_commission_earned` columns are kept (and mirrored for GHS) so older reports still work, but new code reads/writes the maps via `creditCommission(id, amount, currency)` and `clearCommissionBalance(id, currency)`.

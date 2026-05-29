@@ -12,6 +12,7 @@ interface UserProfile {
   balance: number
   totalDeposited: number
   totalWithdrawn: number
+  currency?: string
 }
 
 export function HomeBalanceCard() {
@@ -87,6 +88,7 @@ export function HomeBalanceCard() {
   }
 
   const balance = profile?.balance ?? 0
+  const currency = profile?.currency ?? 'GHS'
   const depositHref = `/users/first-deposit?userId=${userId}`
 
   return (
@@ -99,7 +101,7 @@ export function HomeBalanceCard() {
             </p>
             <div className="flex items-center gap-2 mt-1 min-w-0">
               <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums truncate">
-                {hidden ? '••••••' : `GHS ${formatMoney(balance)}`}
+                {hidden ? '••••••' : `${currency} ${formatMoney(balance, currency)}`}
               </p>
               <button
                 type="button"

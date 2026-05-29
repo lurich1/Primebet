@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto'
 import type { SubAdmin } from '@/lib/types'
 import { supabaseServer } from '@/lib/supabase'
+import { SUPPORTED_CURRENCY_CODES, type CurrencyCode } from '@/lib/countries'
 
 interface SubAdminRow {
   id: string
@@ -11,10 +12,22 @@ interface SubAdminRow {
   approved: boolean
   commission_balance: number
   total_commission_earned: number
+  commission_balances: Record<string, number> | null
+  total_commission_earned_by: Record<string, number> | null
   created_at: string
 }
 
 const REF_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+function sanitiseCurrencyMap(input: Record<string, unknown> | null | undefined): Partial<Record<CurrencyCode, number>> {
+  if (!input) return {}
+  const out: Partial<Record<CurrencyCode, number>> = {}
+  for (const code of SUPPORTED_CURRENCY_CODES) {
+    const v = Number(input[code])
+    if (Number.isFinite(v) && v !== 0) out[code] = +v.toFixed(2)
+  }
+  return out
+}
 
 function rowToSubAdmin(row: SubAdminRow): SubAdmin {
   return {
@@ -27,6 +40,8 @@ function rowToSubAdmin(row: SubAdminRow): SubAdmin {
     createdAt: row.created_at,
     commissionBalance: Number(row.commission_balance),
     totalCommissionEarned: Number(row.total_commission_earned),
+    commissionBalances: sanitiseCurrencyMap(row.commission_balances),
+    totalCommissionEarnedBy: sanitiseCurrencyMap(row.total_commission_earned_by),
   }
 }
 
@@ -94,7 +109,7 @@ export async function findSubAdminByReferralCode(
 export async function addSubAdmin(
   input: Omit<
     SubAdmin,
-    'id' | 'createdAt' | 'commissionBalance' | 'totalCommissionEarned'
+    'id' | 'createdAt' | 'commissionBalance' | 'totalCommissionEarned' | 'commissionBalances' | 'totalCommissionEarnedBy'
   >,
 ): Promise<SubAdmin> {
   const { data, error } = await supabaseServer()
@@ -127,6 +142,10 @@ export async function updateSubAdmin(
     dbPatch.commission_balance = patch.commissionBalance
   if (patch.totalCommissionEarned !== undefined)
     dbPatch.total_commission_earned = patch.totalCommissionEarned
+  if (patch.commissionBalances !== undefined)
+    dbPatch.commission_balances = patch.commissionBalances
+  if (patch.totalCommissionEarnedBy !== undefined)
+    dbPatch.total_commission_earned_by = patch.totalCommissionEarnedBy
 
   if (Object.keys(dbPatch).length === 0) {
     return findSubAdminById(id)
@@ -142,16 +161,52 @@ export async function updateSubAdmin(
   return data ? rowToSubAdmin(data) : null
 }
 
+/**
+ * Add `amount` of `currency` to the sub-admin's balance map (and lifetime
+ * total map). Currency is required now that wallets can be GHS/NGN/KES/ZAR.
+ *
+ * For backwards compatibility we also bump the legacy GHS scalar columns
+ * whenever the currency is GHS, so any older admin code that reads
+ * `commission_balance` directly keeps working until those callers are gone.
+ */
 export async function creditCommission(
   id: string,
   amount: number,
+  currency: CurrencyCode,
 ): Promise<SubAdmin | null> {
   const current = await findSubAdminById(id)
   if (!current) return null
-  return updateSubAdmin(id, {
-    commissionBalance: +(current.commissionBalance + amount).toFixed(2),
-    totalCommissionEarned: +(current.totalCommissionEarned + amount).toFixed(2),
-  })
+  const nextBalances = { ...current.commissionBalances }
+  const nextLifetime = { ...current.totalCommissionEarnedBy }
+  nextBalances[currency] = +(((nextBalances[currency] ?? 0) + amount)).toFixed(2)
+  nextLifetime[currency] = +(((nextLifetime[currency] ?? 0) + amount)).toFixed(2)
+
+  const patch: Partial<SubAdmin> = {
+    commissionBalances: nextBalances,
+    totalCommissionEarnedBy: nextLifetime,
+  }
+  if (currency === 'GHS') {
+    patch.commissionBalance = +(current.commissionBalance + amount).toFixed(2)
+    patch.totalCommissionEarned = +(current.totalCommissionEarned + amount).toFixed(2)
+  }
+  return updateSubAdmin(id, patch)
+}
+
+/**
+ * Zero out the sub-admin's balance for one specific currency — used when the
+ * admin marks a per-currency payout as paid. Lifetime totals are untouched.
+ */
+export async function clearCommissionBalance(
+  id: string,
+  currency: CurrencyCode,
+): Promise<SubAdmin | null> {
+  const current = await findSubAdminById(id)
+  if (!current) return null
+  const next = { ...current.commissionBalances }
+  next[currency] = 0
+  const patch: Partial<SubAdmin> = { commissionBalances: next }
+  if (currency === 'GHS') patch.commissionBalance = 0
+  return updateSubAdmin(id, patch)
 }
 
 export async function deleteSubAdmin(id: string): Promise<boolean> {

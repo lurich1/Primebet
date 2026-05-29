@@ -140,6 +140,18 @@ export async function findPaymentById(id: string): Promise<PaymentRecord | null>
   return data ? rowToRecord(data as PaymentRow) : null
 }
 
+export async function findPaymentByReference(
+  reference: string,
+): Promise<PaymentRecord | null> {
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .select('*')
+    .eq('reference', reference)
+    .maybeSingle()
+  if (error) throw new Error(`payments.findByReference: ${error.message}`)
+  return data ? rowToRecord(data as PaymentRow) : null
+}
+
 /**
  * Flip a failed/pending payment row to success and stamp who resolved it.
  * Returns the updated record, or null if the row didn't exist.

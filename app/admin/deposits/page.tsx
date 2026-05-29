@@ -43,6 +43,7 @@ interface UserRollup {
   userId: string
   name: string
   email: string
+  currency: string
   depositCount: number
   depositTotal: number
   lastDepositAt: string
@@ -52,7 +53,11 @@ interface UserRollup {
 interface DepositsResponse {
   deposits: DepositRow[]
   userRollup: UserRollup[]
-  totals: { successCount: number; successAmount: number }
+  totals: {
+    successCount: number
+    /** Per-currency totals, e.g. { GHS: 5000, NGN: 30000 }. */
+    successAmountByCurrency: Record<string, number>
+  }
 }
 
 type View = 'users' | 'transactions'
@@ -115,10 +120,10 @@ export default function AdminDepositsPage() {
     )
   }, [data])
 
-  const resolvePayment = async (paymentId: string, userName: string, amount: number) => {
+  const resolvePayment = async (paymentId: string, userName: string, amount: number, currency: string) => {
     if (
       !confirm(
-        `Credit ${userName} GHS ${formatMoney(amount)} and mark this Moolre attempt as resolved?\n\nMake sure the user actually paid — this cannot be undone here.`,
+        `Credit ${userName} ${currency} ${formatMoney(amount, currency)} and mark this attempt as resolved?\n\nMake sure the user actually paid — this cannot be undone here.`,
       )
     ) {
       return
@@ -189,22 +194,33 @@ export default function AdminDepositsPage() {
       )}
 
       {data && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Kpi
-            icon={<TrendingUp className="w-4 h-4 text-success" />}
-            label="Total deposited"
-            value={`GHS ${formatMoney(data.totals.successAmount)}`}
-          />
-          <Kpi
-            icon={<Receipt className="w-4 h-4 text-primary" />}
-            label="Successful deposits"
-            value={data.totals.successCount.toString()}
-          />
-          <Kpi
-            icon={<Users className="w-4 h-4 text-primary" />}
-            label="Depositors"
-            value={data.userRollup.length.toString()}
-          />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Kpi
+              icon={<Receipt className="w-4 h-4 text-primary" />}
+              label="Successful deposits"
+              value={data.totals.successCount.toString()}
+            />
+            <Kpi
+              icon={<Users className="w-4 h-4 text-primary" />}
+              label="Depositors"
+              value={data.userRollup.length.toString()}
+            />
+          </div>
+          {Object.keys(data.totals.successAmountByCurrency).length > 0 && (
+            <div className="bg-card border border-border rounded-xl p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-success" /> Total deposited by currency
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(data.totals.successAmountByCurrency).map(([cur, total]) => (
+                  <div key={cur} className="text-sm font-bold tabular-nums">
+                    {cur} {formatMoney(total, cur)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -287,13 +303,13 @@ export default function AdminDepositsPage() {
                       {u.email}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                      Last deposit: {formatDate(u.lastDepositAt)} · Balance: GHS{' '}
-                      {formatMoney(u.balance)}
+                      Last deposit: {formatDate(u.lastDepositAt)} · Balance: {u.currency}{' '}
+                      {formatMoney(u.balance, u.currency)}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold tabular-nums">
-                      GHS {formatMoney(u.depositTotal)}
+                      {u.currency} {formatMoney(u.depositTotal, u.currency)}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
                       {u.depositCount} deposit{u.depositCount === 1 ? '' : 's'}
@@ -356,18 +372,15 @@ export default function AdminDepositsPage() {
                                 : 'text-success'
                           }`}
                         >
-                          {isFailed ? '✕' : isPending ? '…' : '+'} GHS{' '}
-                          {formatMoney(d.amount)}
-                        </p>
-                        <p className="text-[10px] uppercase text-muted-foreground">
-                          {d.currency}
+                          {isFailed ? '✕' : isPending ? '…' : '+'} {d.currency}{' '}
+                          {formatMoney(d.amount, d.currency)}
                         </p>
                       </div>
                       {canResolve && (
                         <Button
                           size="sm"
                           onClick={() =>
-                            resolvePayment(d.id, d.user!.name, d.amount)
+                            resolvePayment(d.id, d.user!.name, d.amount, d.currency)
                           }
                           disabled={resolvingId === d.id}
                           className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
@@ -484,7 +497,7 @@ function FailureReason({ metadata }: { metadata: DepositRow }) {
       <span className="truncate">
         {metadata.failureReason}
         {metadata.paidAmount != null
-          ? ` (paid GHS ${formatMoney(metadata.paidAmount)})`
+          ? ` (paid ${metadata.currency} ${formatMoney(metadata.paidAmount, metadata.currency)})`
           : ''}
       </span>
     </p>

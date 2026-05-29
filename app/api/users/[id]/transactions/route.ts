@@ -17,6 +17,7 @@ export interface TransactionItem {
   kind: TransactionKind
   /** Positive for credits (deposit, won), negative for debits (withdrawal, bet stake). */
   amount: number
+  currency: string
   status: 'pending' | 'success' | 'failed' | 'cancelled'
   createdAt: string
   reference?: string
@@ -51,6 +52,7 @@ export async function GET(
       id: `pay-${p.id}`,
       kind: isDeposit ? 'deposit' : 'withdrawal',
       amount: isDeposit ? p.amount : -p.amount,
+      currency: p.currency,
       status: p.status,
       createdAt: p.createdAt,
       reference: p.reference,
@@ -72,6 +74,7 @@ export async function GET(
       id: `bet-${b.id}-stake`,
       kind: 'bet-placed',
       amount: -b.stake,
+      currency: b.currency,
       status: 'success',
       createdAt: b.placedAt,
       reference: b.code,
@@ -85,6 +88,7 @@ export async function GET(
         id: `bet-${b.id}-payout`,
         kind: 'bet-won',
         amount: payout,
+        currency: b.currency,
         status: 'success',
         createdAt: b.settledAt,
         reference: b.code,
@@ -96,6 +100,7 @@ export async function GET(
         id: `bet-${b.id}-lost`,
         kind: 'bet-lost',
         amount: 0,
+        currency: b.currency,
         status: 'success',
         createdAt: b.settledAt,
         reference: b.code,
@@ -111,6 +116,8 @@ export async function GET(
     user: {
       id: user.id,
       name: user.name,
+      country: user.country,
+      currency: user.currency,
       balance: user.balance ?? 0,
       totalDeposited: user.totalDeposited,
       totalWithdrawn: user.totalWithdrawn ?? 0,

@@ -8,15 +8,23 @@ import { Eye, EyeOff, ArrowLeft, Check, Loader2, Gift } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
+import {
+  DEFAULT_COUNTRY,
+  getCountry,
+  listCountries,
+  type CountryCode,
+} from '@/lib/countries'
 
 function RegisterForm() {
   const router = useRouter()
   const params = useSearchParams()
 
+  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY)
+  const countryCfg = getCountry(country)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [ghanaCard, setGhanaCard] = useState('')
+  const [kyc, setKyc] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   // Lazy-init from ?ref= so the real referral code is on the field at first
@@ -57,7 +65,8 @@ function RegisterForm() {
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          ghanaCard: ghanaCard.trim(),
+          country,
+          kyc: kyc.trim(),
           password,
           referralCode: referralCode.trim(),
         }),
@@ -132,6 +141,28 @@ function RegisterForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
+                <label htmlFor="country" className="text-sm font-medium text-foreground">
+                  Country
+                </label>
+                <select
+                  id="country"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value as CountryCode)}
+                  className="h-11 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  required
+                >
+                  {listCountries().map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag}  {c.name} ({c.currency})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Your wallet will be in {countryCfg.currency}.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
                 <label htmlFor="name" className="text-sm font-medium text-foreground">
                   Full name
                 </label>
@@ -163,38 +194,38 @@ function RegisterForm() {
 
               <div className="space-y-1.5">
                 <label htmlFor="phone" className="text-sm font-medium text-foreground">
-                  Mobile money number
+                  Phone number
                 </label>
                 <Input
                   id="phone"
                   type="tel"
                   inputMode="tel"
-                  placeholder="0244XXXXXXX"
+                  placeholder={`+${countryCfg.dialCode} …`}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="h-11 bg-secondary border-border"
-                  pattern="^(?:\+?233|0)\d{9}$"
                   autoComplete="tel"
                   required
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  We use this when paying out withdrawals.
+                  We use this when paying out withdrawals. {countryCfg.name} numbers
+                  accepted with or without +{countryCfg.dialCode}.
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="ghanaCard" className="text-sm font-medium text-foreground">
-                  Ghana Card number
+                <label htmlFor="kyc" className="text-sm font-medium text-foreground">
+                  {countryCfg.kycLabel}
                 </label>
                 <Input
-                  id="ghanaCard"
+                  id="kyc"
                   type="text"
                   inputMode="text"
-                  placeholder="GHA-XXXXXXXXX-X"
-                  value={ghanaCard}
-                  onChange={(e) => setGhanaCard(e.target.value.toUpperCase())}
+                  placeholder={countryCfg.kycPlaceholder}
+                  value={kyc}
+                  onChange={(e) => setKyc(country === 'GH' ? e.target.value.toUpperCase() : e.target.value)}
                   className="h-11 bg-secondary border-border tracking-wider font-mono"
-                  maxLength={15}
+                  maxLength={country === 'GH' ? 15 : 20}
                   required
                 />
                 <p className="text-[11px] text-muted-foreground">

@@ -31,35 +31,36 @@ export async function GET() {
       referralCode: sa.referralCode,
       approved: sa.approved,
       createdAt: sa.createdAt,
+      // Legacy GHS scalars retained so older clients keep rendering.
       commissionBalance: sa.commissionBalance,
       totalCommissionEarned: sa.totalCommissionEarned,
+      // Per-currency authoritative balances.
+      commissionBalances: sa.commissionBalances,
+      totalCommissionEarnedBy: sa.totalCommissionEarnedBy,
       referrals: refs.length,
       withDeposit,
       commissionsCount: myCommissions.length,
     }
   })
 
-  // Platform-level totals. For every commission row, the user deposited
-  // `depositAmount`, the sub-admin received `commission` (60%), and the
-  // admin keeps the rest (40%). We compute the admin's share by summing
-  // `depositAmount - commission` so it stays correct if the rate ever
-  // changes per-row.
-  const totals = commissions.reduce(
-    (acc, c) => {
-      acc.deposits += c.depositAmount
-      acc.subAdminShare += c.commission
-      acc.adminShare += c.depositAmount - c.commission
-      return acc
-    },
-    { deposits: 0, subAdminShare: 0, adminShare: 0 },
-  )
+  // Per-currency platform totals. Every commission row carries its own
+  // currency now, so we group there instead of summing into a single number.
+  const referredDepositsByCurrency: Record<string, number> = {}
+  const subAdminShareByCurrency: Record<string, number> = {}
+  const adminShareByCurrency: Record<string, number> = {}
+  for (const c of commissions) {
+    const cur = c.currency
+    referredDepositsByCurrency[cur] = +(((referredDepositsByCurrency[cur] ?? 0) + c.depositAmount)).toFixed(2)
+    subAdminShareByCurrency[cur] = +(((subAdminShareByCurrency[cur] ?? 0) + c.commission)).toFixed(2)
+    adminShareByCurrency[cur] = +(((adminShareByCurrency[cur] ?? 0) + (c.depositAmount - c.commission))).toFixed(2)
+  }
 
   return NextResponse.json({
     subAdmins: enriched,
     platform: {
-      referredDeposits: +totals.deposits.toFixed(2),
-      subAdminShare: +totals.subAdminShare.toFixed(2),
-      adminShare: +totals.adminShare.toFixed(2),
+      referredDepositsByCurrency,
+      subAdminShareByCurrency,
+      adminShareByCurrency,
     },
   })
 }

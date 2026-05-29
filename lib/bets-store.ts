@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto'
 import type { BetSelection, Match, PlacedBet } from '@/lib/types'
 import { supabaseServer } from '@/lib/supabase'
+import { DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '@/lib/countries'
 
 export type { PlacedBet }
 
@@ -14,6 +15,7 @@ interface BetRow {
   stake: number
   total_odds: number
   potential_win: number
+  currency: string | null
   status: 'pending' | 'won' | 'lost'
   settled_at: string | null
   payout: number | null
@@ -62,6 +64,7 @@ function rowToSelection(row: BetSelectionRow): BetSelection {
 }
 
 function rowToBet(row: BetRow, selections: BetSelection[]): PlacedBet {
+  const currency: CurrencyCode = isCurrencyCode(row.currency) ? row.currency : DEFAULT_CURRENCY
   return {
     id: row.id,
     code: row.code,
@@ -70,6 +73,7 @@ function rowToBet(row: BetRow, selections: BetSelection[]): PlacedBet {
     stake: Number(row.stake),
     totalOdds: Number(row.total_odds),
     potentialWin: Number(row.potential_win),
+    currency,
     status: row.status,
     selections,
     settledAt: row.settled_at ?? undefined,
@@ -162,6 +166,7 @@ export async function addBet(bet: PlacedBet): Promise<void> {
       stake: bet.stake,
       total_odds: bet.totalOdds,
       potential_win: bet.potentialWin,
+      currency: bet.currency ?? DEFAULT_CURRENCY,
       status: bet.status,
       settled_at: bet.settledAt ?? null,
       payout: bet.payout ?? null,

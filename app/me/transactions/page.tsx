@@ -26,6 +26,7 @@ interface TransactionItem {
   id: string
   kind: TransactionKind
   amount: number
+  currency?: string
   status: 'pending' | 'success' | 'failed' | 'cancelled'
   createdAt: string
   reference?: string
@@ -37,6 +38,7 @@ interface ApiResponse {
   user: {
     id: string
     name: string
+    currency?: string
     balance: number
     totalDeposited: number
     totalWithdrawn: number
@@ -111,14 +113,17 @@ export default function TransactionsPage() {
           {data && (
             <section className="px-3 sm:px-4 pt-4">
               <div className="rounded-xl bg-card border border-border p-4 grid grid-cols-3 gap-3 text-center">
-                <Summary label="Balance" value={`GHS ${formatMoney(data.user.balance)}`} />
+                <Summary
+                  label="Balance"
+                  value={`${data.user.currency ?? 'GHS'} ${formatMoney(data.user.balance, data.user.currency)}`}
+                />
                 <Summary
                   label="Deposited"
-                  value={`GHS ${formatMoney(data.user.totalDeposited)}`}
+                  value={`${data.user.currency ?? 'GHS'} ${formatMoney(data.user.totalDeposited, data.user.currency)}`}
                 />
                 <Summary
                   label="Withdrawn"
-                  value={`GHS ${formatMoney(data.user.totalWithdrawn)}`}
+                  value={`${data.user.currency ?? 'GHS'} ${formatMoney(data.user.totalWithdrawn, data.user.currency)}`}
                 />
               </div>
             </section>
@@ -229,9 +234,9 @@ function TransactionRow({ tx }: { tx: TransactionItem }) {
       </div>
       <div className="text-right shrink-0">
         <p className={`font-bold tabular-nums ${amountColor}`}>
-          {isZero ? '—' : `${sign}${formatMoney(tx.amount)}`}
+          {isZero ? '—' : `${sign}${formatMoney(tx.amount, tx.currency)}`}
         </p>
-        <p className="text-[10px] text-muted-foreground">GHS</p>
+        <p className="text-[10px] text-muted-foreground">{tx.currency ?? 'GHS'}</p>
       </div>
     </li>
   )

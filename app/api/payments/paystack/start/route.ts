@@ -1,22 +1,28 @@
 import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
-import { getMinFirstDeposit, getMoolrePosUrl } from '@/lib/moolre'
+import { initialiseTransaction } from '@/lib/paystack'
+import { getMinFirstDeposit } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
 
 interface StartBody {
   userId?: string
   amount?: number
-  /** Where to send the user after the (manual) reconciliation. */
   returnPath?: string
-  /** Tag for traceability — 'deposit' (default) or 'verification'. */
   purpose?: 'deposit' | 'verification'
 }
 
 function sanitizeReturnPath(raw: string | undefined): string {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/me'
   return raw
+}
+
+function originFromRequest(req: Request): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (explicit) return explicit.replace(/\/$/, '')
+  const url = new URL(req.url)
+  return `${url.protocol}//${url.host}`
 }
 
 export async function POST(request: Request) {
@@ -37,40 +43,22 @@ export async function POST(request: Request) {
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'amount must be > 0' }, { status: 400 })
   }
-  const minDeposit = getMinFirstDeposit()
-  if (amount < minDeposit) {
-    return NextResponse.json(
-      { error: `minimum deposit is GHS ${minDeposit.toFixed(2)}` },
-      { status: 400 },
-    )
-  }
-
-  const posUrl = getMoolrePosUrl()
-  if (!posUrl) {
-    return NextResponse.json(
-      { error: 'MOOLRE_POS_URL not configured' },
-      { status: 502 },
-    )
-  }
 
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
-  // Moolre's hosted POS page accepts GHS only — non-Ghana users should be
-  // routed to /api/payments/paystack/start instead.
-  if (user.country !== 'GH') {
+  const minDeposit = getMinFirstDeposit(user.country)
+  if (amount < minDeposit) {
     return NextResponse.json(
-      { error: 'Moolre supports Ghana wallets only — use Paystack' },
+      { error: `minimum deposit is ${user.currency} ${minDeposit.toFixed(2)}` },
       { status: 400 },
     )
   }
 
   const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
   const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
+  const callbackUrl = `${originFromRequest(request)}/api/payments/paystack/callback?returnPath=${encodeURIComponent(returnPath)}`
 
-  // Pending row so the admin can see the intent on /admin/deposits and
-  // credit it once they confirm the payment on the Moolre dashboard. The
-  // unique constraint on `reference` makes this idempotent.
   try {
     await recordPayment({
       userId,
@@ -78,19 +66,43 @@ export async function POST(request: Request) {
       amount,
       type: 'deposit',
       status: 'pending',
-      provider: 'moolre',
+      provider: 'paystack',
       currency: user.currency,
       metadata: {
         purpose,
         returnPath,
         userName: user.name,
         userPhone: user.phone ?? null,
-        flow: 'pos-link',
+        country: user.country,
       },
     })
   } catch (e) {
-    console.error('[moolre/start] pending ledger write failed:', e)
+    console.error('[paystack/start] pending ledger write failed:', e)
   }
 
-  return NextResponse.json({ url: posUrl, reference }, { status: 201 })
+  try {
+    const init = await initialiseTransaction({
+      email: user.email,
+      amount,
+      currency: user.currency,
+      reference,
+      callbackUrl,
+      metadata: {
+        userId,
+        purpose,
+        country: user.country,
+        userName: user.name,
+      },
+    })
+    return NextResponse.json(
+      { url: init.authorization_url, reference: init.reference },
+      { status: 201 },
+    )
+  } catch (e) {
+    console.error('[paystack/start] init failed:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'paystack init failed' },
+      { status: 502 },
+    )
+  }
 }

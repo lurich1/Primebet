@@ -6,8 +6,25 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const [bets, users] = await Promise.all([readBets(), listUsersForAdmin()])
-  const totalUserDeposits = users.reduce((s, u) => s + (u.totalDeposited ?? 0), 0)
-  const totalUserWithdrawals = users.reduce((s, u) => s + (u.totalWithdrawn ?? 0), 0)
+
+  // Wallets are denominated in different currencies; group these sums by
+  // currency so the admin dashboard can render one row per currency instead
+  // of summing GHS+NGN+KES+ZAR into a meaningless number.
+  const depositsByCurrency: Record<string, number> = {}
+  const withdrawalsByCurrency: Record<string, number> = {}
+  const stakesByCurrency: Record<string, number> = {}
+  const returnsByCurrency: Record<string, number> = {}
+  for (const u of users) {
+    depositsByCurrency[u.currency] = +(((depositsByCurrency[u.currency] ?? 0) + (u.totalDeposited ?? 0))).toFixed(2)
+    withdrawalsByCurrency[u.currency] = +(((withdrawalsByCurrency[u.currency] ?? 0) + (u.totalWithdrawn ?? 0))).toFixed(2)
+  }
+  for (const b of bets) {
+    stakesByCurrency[b.currency] = +(((stakesByCurrency[b.currency] ?? 0) + b.stake)).toFixed(2)
+    if (b.status === 'won') {
+      const ret = b.payout ?? b.potentialWin
+      returnsByCurrency[b.currency] = +(((returnsByCurrency[b.currency] ?? 0) + ret)).toFixed(2)
+    }
+  }
 
   const open = bets.filter((b) => b.status === 'pending')
   const won = bets.filter((b) => b.status === 'won')
@@ -76,13 +93,18 @@ export async function GET() {
       users: users.length,
     },
     money: {
+      // Legacy single-number fields are kept for backwards compatibility but
+      // are only meaningful in a single-currency deployment. New consumers
+      // should read the *ByCurrency maps below.
       totalStake: +totalStake.toFixed(2),
       openStake: +openStake.toFixed(2),
       settledStake: +settledStake.toFixed(2),
       totalReturns: +totalReturns.toFixed(2),
       netPL: +netPL.toFixed(2),
-      totalUserDeposits: +totalUserDeposits.toFixed(2),
-      totalUserWithdrawals: +totalUserWithdrawals.toFixed(2),
+      depositsByCurrency,
+      withdrawalsByCurrency,
+      stakesByCurrency,
+      returnsByCurrency,
     },
     winRate,
     byDay,
