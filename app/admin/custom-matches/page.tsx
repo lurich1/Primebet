@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, CircleAlert, CheckCircle2, Upload, X, Lock, Unlo
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { sports } from '@/lib/mock-data'
 import type { Match } from '@/lib/types'
 
@@ -189,19 +190,21 @@ export default function AdminCustomMatchesPage() {
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold">Custom matches</h1>
+        <h1 className="text-title font-bold tracking-tight">Custom matches</h1>
         <p className="text-sm text-muted-foreground">
           Add games that aren't in The Odds API. They merge into{' '}
-          <code className="font-mono text-xs">/api/matches</code> and appear in the public
+          <code className="font-mono text-xs px-1.5 py-0.5 rounded bg-secondary">/api/matches</code> and appear in the public
           listings.
         </p>
       </div>
 
       {/* Create form */}
-      <section className="bg-card border border-border rounded-xl p-4 sm:p-6">
+      <section className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-card">
         <header className="flex items-center gap-2 mb-4">
-          <Plus className="w-4 h-4 text-primary" />
-          <h2 className="font-semibold">Add a match</h2>
+          <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Plus className="w-4 h-4 text-primary" />
+          </span>
+          <h2 className="font-semibold text-title">Add a match</h2>
         </header>
 
         <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -377,7 +380,7 @@ export default function AdminCustomMatchesPage() {
           </div>
 
           {error && (
-            <div className="md:col-span-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2">
+            <div className="md:col-span-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2 shadow-card">
               <CircleAlert className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -412,19 +415,21 @@ export default function AdminCustomMatchesPage() {
       </section>
 
       {/* Existing custom matches */}
-      <section className="bg-card border border-border rounded-xl overflow-hidden">
+      <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
         <header className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold">Existing custom matches ({matches.length})</h2>
+          <h2 className="font-semibold text-title">Existing custom matches ({matches.length})</h2>
         </header>
 
         {loading ? (
-          <div className="p-6 flex items-center text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
+          <div className="p-3 space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-lg" />
+            ))}
           </div>
         ) : matches.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            No custom matches yet. Add one using the form above.
-          </p>
+          <div className="m-3 bg-card border border-dashed border-border rounded-lg p-8 text-center">
+            <p className="text-sm text-muted-foreground">No custom matches yet. Add one using the form above.</p>
+          </div>
         ) : (
           <ul className="divide-y divide-border">
             {matches.map((m) => (

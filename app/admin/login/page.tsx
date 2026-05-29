@@ -72,14 +72,20 @@ function LoginForm() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-card rounded-2xl border border-border p-6 sm:p-8">
+      <main className="flex-1 flex items-center justify-center p-4 py-8">
+        <div className="relative w-full max-w-md">
+          <div aria-hidden className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
+          <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+
+          <div className="relative bg-card rounded-2xl border border-border p-6 sm:p-8 shadow-card">
             <div className="text-center mb-6">
-              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <ShieldAlert className="w-7 h-7 text-primary" />
+              <div className="relative w-14 h-14 mx-auto mb-3">
+                <div aria-hidden className="absolute inset-0 rounded-2xl bg-primary/25 blur-xl" />
+                <div className="relative w-14 h-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-card">
+                  <ShieldAlert className="w-7 h-7 text-primary" />
+                </div>
               </div>
-              <h1 className="text-2xl font-bold text-foreground">Admin Sign-in</h1>
+              <h1 className="text-title font-bold text-foreground tracking-tight">Admin sign-in</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 Enter the password set in your .env.local
               </p>
@@ -89,7 +95,7 @@ function LoginForm() {
               <div>
                 <label
                   htmlFor="admin-password"
-                  className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2"
+                  className="text-eyebrow text-muted-foreground block mb-2"
                 >
                   Password
                 </label>
@@ -101,12 +107,12 @@ function LoginForm() {
                   placeholder="••••••••"
                   required
                   autoFocus
-                  className="bg-secondary border-border"
+                  className="h-12 bg-secondary border-border"
                 />
               </div>
 
               {error && (
-                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium">
                   {error}
                 </div>
               )}
@@ -114,7 +120,7 @@ function LoginForm() {
               <Button
                 type="submit"
                 disabled={loading || disabled}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
               >
                 {loading ? (
                   <>
@@ -127,7 +133,7 @@ function LoginForm() {
             </form>
           </div>
 
-          <p className="text-center text-xs text-muted-foreground mt-4">
+          <p className="relative text-center text-xs text-muted-foreground mt-4">
             This area is gated by a single shared password. Rotate it by changing
             ADMIN_PASSWORD in .env.local.
           </p>

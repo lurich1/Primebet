@@ -48,12 +48,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-background flex flex-col lg:flex-row">
       {/* Mobile top bar */}
-      <header className="lg:hidden bg-card border-b border-border sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-3">
+      <header className="lg:hidden bg-card border-b border-border sticky top-0 z-40 shadow-card">
+        <div className="flex items-center justify-between px-3 h-14">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="p-2 -ml-2 rounded-md hover:bg-secondary"
+              className="p-2 -ml-1 rounded-lg hover:bg-secondary transition-colors"
               aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
@@ -67,13 +67,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className="logo-img h-7 w-auto"
               />
             </Link>
-            <span className="text-xs uppercase tracking-wider text-muted-foreground border border-border rounded-full px-2 py-0.5">
+            <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
               Admin
             </span>
           </div>
           <button
             onClick={handleLogout}
-            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary"
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             aria-label="Logout"
           >
             <LogOut className="w-5 h-5" />
@@ -93,22 +93,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className="logo-img h-7 w-auto"
             />
           </Link>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-full px-2 py-0.5">
+          <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
             Admin
           </span>
         </div>
         <NavList pathname={pathname} onNavigate={() => {}} />
-        <div className="px-3 py-4 border-t border-border">
+        <div className="px-3 py-4 border-t border-border space-y-1.5">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
             <LogOut className="w-4 h-4" />
             <span>Logout</span>
           </button>
           <Link
             href="/"
-            className="w-full block text-center mt-2 text-xs text-muted-foreground hover:text-foreground"
+            className="w-full flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             ← Back to site
           </Link>
@@ -119,12 +119,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r border-border flex flex-col">
+          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r border-border flex flex-col shadow-popover animate-in slide-in-from-left duration-200">
             <div className="px-5 py-5 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 min-w-0">
                 <Image
                   src="/primebet.png"
                   alt="Prime Bet"
@@ -132,24 +132,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   height={123}
                   className="logo-img h-7 w-auto"
                 />
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-full px-2 py-0.5">
+                <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
                   Admin
                 </span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-1 rounded-md hover:bg-secondary"
+                className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <NavList pathname={pathname} onNavigate={() => setMobileOpen(false)} />
-            <div className="px-3 py-4 border-t border-border">
+            <div className="px-3 py-4 border-t border-border space-y-1.5">
+              <button
+                onClick={() => {
+                  setMobileOpen(false)
+                  void handleLogout()
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
               <Link
                 href="/"
                 onClick={() => setMobileOpen(false)}
-                className="block text-center text-xs text-muted-foreground hover:text-foreground"
+                className="block text-center text-xs text-muted-foreground hover:text-primary transition-colors"
               >
                 ← Back to site
               </Link>
@@ -171,7 +181,7 @@ function NavList({
   onNavigate: () => void
 }) {
   return (
-    <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+    <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
       {NAV.map(({ href, label, icon: Icon, exact }) => {
         const active = exact ? pathname === href : pathname.startsWith(href)
         return (
@@ -179,13 +189,17 @@ function NavList({
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               active
-                ? 'bg-primary text-primary-foreground'
-                : 'text-foreground hover:bg-secondary'
+                ? 'bg-primary text-primary-foreground shadow-card-pressed'
+                : 'text-foreground hover:bg-secondary hover:translate-x-0.5'
             }`}
           >
-            <Icon className="w-4 h-4 shrink-0" />
+            <Icon
+              className={`w-4 h-4 shrink-0 transition-transform ${
+                active ? '' : 'group-hover:scale-110'
+              }`}
+            />
             <span>{label}</span>
           </Link>
         )

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, RefreshCcw, AlertCircle, CheckCircle2, Pencil, Lock, Unlock, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { sports } from '@/lib/mock-data'
 import type { Match } from '@/lib/types'
 
@@ -80,7 +81,7 @@ export default function AdminMatchesPage() {
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Matches monitor</h1>
+          <h1 className="text-title font-bold tracking-tight">Matches monitor</h1>
           <p className="text-sm text-muted-foreground">
             Live snapshot of what the /api/matches endpoint returns per sport.
           </p>
@@ -106,10 +107,10 @@ export default function AdminMatchesPage() {
           <button
             key={s.id}
             onClick={() => setActiveSport(s.id)}
-            className={`px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
               activeSport === s.id
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-card'
+                : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/70'
             }`}
           >
             <span>{s.icon}</span>
@@ -121,9 +122,9 @@ export default function AdminMatchesPage() {
       {/* Source indicator */}
       {data && (
         <div
-          className={`p-3 rounded-lg border text-sm flex items-start gap-2 ${
+          className={`p-3 rounded-xl border text-sm flex items-start gap-2 shadow-card ${
             data.source === 'odds-api'
-              ? 'bg-success/10 border-success/20 text-success'
+              ? 'bg-success/10 border-success/30 text-success'
               : 'bg-secondary border-border text-muted-foreground'
           }`}
         >
@@ -146,22 +147,24 @@ export default function AdminMatchesPage() {
       )}
 
       {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm shadow-card">
           {error}
         </div>
       )}
 
       {/* Match list */}
       {loading && !data ? (
-        <div className="flex items-center text-muted-foreground py-12 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-xl" />
+          ))}
         </div>
       ) : matches.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12 text-sm">
-          No matches returned for {activeSport}.
-        </p>
+        <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center">
+          <p className="text-sm text-muted-foreground">No matches returned for {activeSport}.</p>
+        </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
           <div className="hidden md:grid grid-cols-[60px_1fr_120px_60px_60px_60px] gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border bg-secondary/40">
             <span>Status</span>
             <span>Match · League</span>

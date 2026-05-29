@@ -11,6 +11,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface StatusResponse {
   env: { odds_api_key: boolean; admin_password: boolean; node_env: string }
@@ -57,10 +58,10 @@ export default function AdminSettingsPage() {
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
+          <h1 className="text-title font-bold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
             Environment + integration status. Read-only — change values by editing{' '}
-            <code className="font-mono text-xs">.env.local</code> and restarting the dev server.
+            <code className="font-mono text-xs px-1.5 py-0.5 rounded bg-secondary">.env.local</code> and restarting the dev server.
           </p>
         </div>
         <Button
@@ -79,17 +80,24 @@ export default function AdminSettingsPage() {
       </div>
 
       {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm shadow-card">
           {error}
+        </div>
+      )}
+
+      {loading && !status && (
+        <div className="space-y-3">
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
         </div>
       )}
 
       {status && (
         <>
           {/* Env vars */}
-          <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
             <header className="px-4 py-3 border-b border-border">
-              <h2 className="font-semibold">Environment</h2>
+              <h2 className="font-semibold text-title">Environment</h2>
               <p className="text-xs text-muted-foreground">
                 NODE_ENV is <code className="font-mono">{status.env.node_env}</code>
               </p>
@@ -109,9 +117,9 @@ export default function AdminSettingsPage() {
           </section>
 
           {/* The Odds API */}
-          <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
             <header className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-              <h2 className="font-semibold">The Odds API</h2>
+              <h2 className="font-semibold text-title">The Odds API</h2>
               <a
                 href="https://the-odds-api.com/account/"
                 target="_blank"
@@ -176,9 +184,9 @@ export default function AdminSettingsPage() {
       )}
 
       {/* Session */}
-      <section className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+      <section className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3 shadow-card">
         <div>
-          <h2 className="font-semibold">Session</h2>
+          <h2 className="font-semibold text-title">Session</h2>
           <p className="text-xs text-muted-foreground">
             Session ends in ~12 hours from sign-in.
           </p>

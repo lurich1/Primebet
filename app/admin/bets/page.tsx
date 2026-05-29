@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { PlacedBet } from '@/lib/types'
 import { getCountryFlag } from '@/lib/country-flags'
 
@@ -145,7 +146,7 @@ export default function AdminBetsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold">Bets</h1>
+        <h1 className="text-title font-bold tracking-tight">Bets</h1>
         <p className="text-sm text-muted-foreground">
           All bets across the platform. Search by code, team, or league.
         </p>
@@ -190,23 +191,27 @@ export default function AdminBetsPage() {
       </div>
 
       {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm shadow-card">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center text-muted-foreground py-12 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading bets…
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12 text-sm">
-          {bets.length === 0
-            ? 'No bets placed yet.'
-            : 'No bets match the current search/filter.'}
-        </p>
+        <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {bets.length === 0
+              ? 'No bets placed yet.'
+              : 'No bets match the current search/filter.'}
+          </p>
+        </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
           {/* Desktop header */}
           <div className="hidden lg:grid grid-cols-[100px_140px_80px_1fr_80px_80px_100px_180px] gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border bg-secondary/40">
             <span>Code</span>
