@@ -76,7 +76,8 @@ const BTTS_BET_IDS = new Set<number>([
   69, // live: Both Teams to Score
 ])
 const DOUBLE_CHANCE_BET_IDS = new Set<number>([
-  12, // pre-match: Double Chance (no live equivalent in API-Football)
+  12, // pre-match: Double Chance
+  72, // live: Double Chance
 ])
 
 interface ApiResponse<T> {
