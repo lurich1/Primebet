@@ -515,5 +515,9 @@ export async function getMatchesForSport(sport: string): Promise<Match[]> {
 }
 
 export function supportedSports(): string[] {
-  return ['football']
+  // Football is the only sport with a real upstream right now (API-Football's
+  // other sport hosts require separate subscriptions). The non-football
+  // sports are kept here so the UI's sport tabs don't 400 — getMatchesForSport
+  // returns [] for them and the page renders custom matches / empty state.
+  return ['football', 'basketball', 'tennis', 'baseball', 'hockey', 'volleyball']
 }
