@@ -19,6 +19,7 @@ interface DebugOddsRow {
   league: string
   betCount: number
   hasMatchWinner: boolean
+  bets: Array<{ id: number; name: string; sampleValues: string[] }>
 }
 
 async function call(path: string, key: string) {
@@ -91,16 +92,26 @@ export async function GET() {
 
   const liveOddsSummary: DebugOddsRow[] = Array.isArray(live_odds.response)
     ? (live_odds.response as Array<Record<string, unknown>>)
-        .slice(0, 10)
+        .slice(0, 3)
         .map((r) => {
           const fixture = r.fixture as Record<string, unknown>
-          const league = r.league as Record<string, unknown>
+          const league = (r.league as Record<string, unknown>) ?? {}
           const odds = (r.odds as Array<Record<string, unknown>>) ?? []
           return {
             fixtureId: fixture.id as number,
-            league: league.name as string,
+            league: (league.name as string) ?? '?',
             betCount: odds.length,
             hasMatchWinner: odds.some((b) => b.id === 1),
+            bets: odds.map((b) => {
+              const values = (b.values as Array<Record<string, unknown>>) ?? []
+              return {
+                id: b.id as number,
+                name: b.name as string,
+                sampleValues: values
+                  .slice(0, 3)
+                  .map((v) => `${v.value}=${v.odd}`),
+              }
+            }),
           }
         })
     : []
