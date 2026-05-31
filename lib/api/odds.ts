@@ -405,6 +405,8 @@ function toMatch(fixture: Fixture, oddsRows: OddsRow[]): Match {
   }
   if (typeof fixture.goals.home === 'number') base.homeScore = fixture.goals.home
   if (typeof fixture.goals.away === 'number') base.awayScore = fixture.goals.away
+  if (fixture.teams.home.logo) base.homeFlagUrl = fixture.teams.home.logo
+  if (fixture.teams.away.logo) base.awayFlagUrl = fixture.teams.away.logo
 
   const derived = deriveMarketBook(base)
   if (derived) {
