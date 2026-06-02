@@ -80,9 +80,13 @@ export async function POST(request: Request) {
     console.error('[paystack/start] pending ledger write failed:', e)
   }
 
+  // Paystack requires an email but we don't want to share the user's real
+  // address with the gateway. Send a stable per-user placeholder instead.
+  const placeholderEmail = `noreply+${userId}@primebet.app`
+
   try {
     const init = await initialiseTransaction({
-      email: user.email,
+      email: placeholderEmail,
       amount,
       currency: user.currency,
       reference,
