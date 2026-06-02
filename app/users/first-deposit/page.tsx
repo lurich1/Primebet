@@ -32,11 +32,13 @@ import {
   type CurrencyCode,
 } from '@/lib/countries'
 import { openPaystackPopup } from '@/lib/paystack-inline'
+import { MobileMoneyForm } from '@/components/payments/mobile-money-form'
 
 interface UserProfile {
   id: string
   name: string
   email?: string
+  phone?: string | null
   country?: string
   currency?: string
   totalDeposited: number
@@ -44,6 +46,8 @@ interface UserProfile {
   balance: number
   firstDepositAt?: string | null
 }
+
+type PayMode = 'momo' | 'card'
 
 // Hard-coded Nigeria manual-deposit bank details — shown to NG players in
 // the manual-flow branch below. Keep in sync with whatever account the
@@ -70,6 +74,7 @@ function DepositForm() {
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
+  const [payMode, setPayMode] = useState<PayMode>('momo')
   // When the user comes back from Moolre with ?moolre=success we re-fetch
   // the profile and show the success screen built from the fresh totals.
   const [showSuccess, setShowSuccess] = useState(false)
@@ -136,6 +141,28 @@ function DepositForm() {
   useEffect(() => {
     if (!amount && profile) setAmount(String(minAmount))
   }, [profile, minAmount, amount])
+
+  // Shared "deposit confirmed" handler used by both the card Inline JS popup
+  // and the custom mobile-money flow. Pulls fresh totals so the success card
+  // reflects the new balance.
+  const handleDepositSuccess = async () => {
+    if (!profile) return
+    try {
+      const me = await fetch(`/api/users/${profile.id}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+      if (me) setProfile(me)
+    } finally {
+      saveUserSession(profile.id)
+      setShowSuccess(true)
+      setLoading(false)
+    }
+  }
+
+  // Mobile-money custom UI is GH-only (Paystack Charge API supports MoMo
+  // for GHS today). Card flow is the fallback / cross-country default.
+  const momoAvailable = gateway === 'paystack' && country === 'GH'
+  const showMoMoFlow = momoAvailable && payMode === 'momo' && Boolean(profile)
 
   const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess && !manualSubmitted
   const headingTitle = showSuccess
@@ -249,14 +276,7 @@ function DepositForm() {
                 setLoading(false)
                 return
               }
-              // Pull fresh totals so the success card shows the new balance.
-              const me = await fetch(`/api/users/${profile.id}`, { cache: 'no-store' })
-                .then((r) => (r.ok ? r.json() : null))
-                .catch(() => null)
-              if (me) setProfile(me)
-              saveUserSession(profile.id)
-              setShowSuccess(true)
-              setLoading(false)
+              await handleDepositSuccess()
             } catch (err) {
               setError(err instanceof Error ? err.message : String(err))
               setLoading(false)
@@ -439,11 +459,73 @@ function DepositForm() {
                       ? 'Pay with MTN, Telecel or AT Money on Moolre.'
                       : gateway === 'manual'
                         ? 'Send a bank transfer to the account below, then upload your payment proof.'
-                        : `Pay securely with card or bank — the checkout opens right here.`}
+                        : showMoMoFlow
+                          ? 'Pay instantly with MTN MoMo, Telecel Cash or AirtelTigo Money.'
+                          : `Pay securely with card or bank — the checkout opens right here.`}
                     {' '}Minimum deposit: <span className="text-foreground font-semibold">{currency} {minAmount}</span>.
                   </p>
                 </div>
 
+                {showMoMoFlow && profile ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-eyebrow text-muted-foreground block mb-2">
+                        Amount ({currency})
+                      </label>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min={minAmount}
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="text-2xl h-14 bg-secondary border-border font-extrabold tabular-nums"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
+                      {[minAmount, minAmount * 1.5, minAmount * 2.5, minAmount * 5]
+                        .map((n) => Math.round(n).toString())
+                        .map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setAmount(preset)}
+                            className={`py-2 rounded-lg text-sm font-bold transition-all ${
+                              amount === preset
+                                ? 'bg-primary text-primary-foreground shadow-card-pressed'
+                                : 'bg-secondary text-foreground hover:bg-secondary/70 hover:-translate-y-0.5 hover:shadow-card'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                    </div>
+
+                    {Number(amount) >= minAmount ? (
+                      <MobileMoneyForm
+                        userId={profile.id}
+                        amount={Number(amount)}
+                        currency={currency}
+                        defaultPhone={profile.phone ?? null}
+                        purpose={purpose}
+                        onSuccess={handleDepositSuccess}
+                        onSwitchToCard={() => setPayMode('card')}
+                      />
+                    ) : (
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/15 text-[11px] text-muted-foreground flex items-start gap-2">
+                        <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
+                        <span>
+                          Enter at least{' '}
+                          <strong className="text-foreground">
+                            {currency} {minAmount}
+                          </strong>{' '}
+                          to send a mobile-money prompt.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {gateway === 'manual' && (
                     <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -633,7 +715,18 @@ function DepositForm() {
                       ? 'Pay via bank transfer · Admin credits your wallet after verifying the screenshot'
                       : `Secured by ${gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account`}
                   </p>
+
+                  {momoAvailable && payMode === 'card' && (
+                    <button
+                      type="button"
+                      onClick={() => setPayMode('momo')}
+                      className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    >
+                      ← Pay with mobile money instead
+                    </button>
+                  )}
                 </form>
+                )}
               </>
             )}
           </div>

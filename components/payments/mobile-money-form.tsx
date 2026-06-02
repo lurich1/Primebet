@@ -1,0 +1,414 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { Loader2, Smartphone, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+
+type Provider = 'mtn' | 'vod' | 'atl'
+
+interface ProviderOption {
+  key: Provider
+  label: string
+  short: string
+  brand: string
+}
+
+const PROVIDERS: ProviderOption[] = [
+  { key: 'mtn', label: 'MTN MoMo', short: 'MTN', brand: 'bg-amber-400 text-black border-amber-500' },
+  { key: 'vod', label: 'Telecel Cash', short: 'Telecel', brand: 'bg-red-500 text-white border-red-600' },
+  { key: 'atl', label: 'AirtelTigo', short: 'AT', brand: 'bg-blue-500 text-white border-blue-600' },
+]
+
+const POLL_INTERVAL_MS = 4000
+const POLL_TIMEOUT_MS = 120_000
+
+interface MobileMoneyFormProps {
+  userId: string
+  amount: number
+  currency: string
+  defaultPhone?: string | null
+  purpose: 'deposit' | 'verification'
+  /** Called when the charge resolves successfully (after server credit). */
+  onSuccess: () => void
+  /** Optional: surface a fallback to the card flow. */
+  onSwitchToCard?: () => void
+}
+
+type Phase =
+  | { kind: 'form' }
+  | { kind: 'awaiting'; reference: string; displayText: string | null; startedAt: number }
+  | { kind: 'failed'; reason: string }
+
+export function MobileMoneyForm({
+  userId,
+  amount,
+  currency,
+  defaultPhone,
+  purpose,
+  onSuccess,
+  onSwitchToCard,
+}: MobileMoneyFormProps) {
+  const [provider, setProvider] = useState<Provider>('mtn')
+  const [phone, setPhone] = useState(defaultPhone ?? '')
+  const [phase, setPhase] = useState<Phase>({ kind: 'form' })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clean up any pending polling timer when the component unmounts or the
+  // phase changes away from 'awaiting'.
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (phase.kind !== 'awaiting') {
+      if (pollTimer.current) {
+        clearTimeout(pollTimer.current)
+        pollTimer.current = null
+      }
+      return
+    }
+
+    let cancelled = false
+    const poll = async () => {
+      if (cancelled) return
+      try {
+        const res = await fetch(
+          `/api/payments/paystack/momo/status?reference=${encodeURIComponent(phase.reference)}`,
+          { cache: 'no-store' },
+        )
+        const data = await res.json().catch(() => ({}))
+        const status: string | undefined = data?.status
+        const ok: boolean = Boolean(data?.ok)
+
+        if (cancelled) return
+
+        if (ok && (status === 'success' || status === 'already-credited')) {
+          onSuccess()
+          return
+        }
+
+        const terminalFailures = new Set([
+          'failed',
+          'abandoned',
+          'amount-mismatch',
+          'verify-failed',
+          'credit-failed',
+          'no-user',
+          'unknown-reference',
+          'missing-reference',
+        ])
+        if (status && terminalFailures.has(status)) {
+          setPhase({
+            kind: 'failed',
+            reason: friendlyFailure(status),
+          })
+          return
+        }
+
+        // Still pending — keep polling unless we've blown past the timeout.
+        if (Date.now() - phase.startedAt > POLL_TIMEOUT_MS) {
+          setPhase({
+            kind: 'failed',
+            reason: 'No response from your phone. The prompt may have expired — try again.',
+          })
+          return
+        }
+        pollTimer.current = setTimeout(poll, POLL_INTERVAL_MS)
+      } catch {
+        if (cancelled) return
+        // Network blip — keep polling.
+        pollTimer.current = setTimeout(poll, POLL_INTERVAL_MS)
+      }
+    }
+    // First poll fires after the interval so the prompt has time to arrive.
+    pollTimer.current = setTimeout(poll, POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      if (pollTimer.current) {
+        clearTimeout(pollTimer.current)
+        pollTimer.current = null
+      }
+    }
+  }, [phase, onSuccess])
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (!phone.trim()) {
+      setError('Enter the phone number tied to your mobile-money wallet.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/payments/paystack/momo/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          amount,
+          phone: phone.trim(),
+          provider,
+          purpose,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.reference) {
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
+      const status: string | undefined = data.status
+      if (status === 'success') {
+        // Rare for mobile money but possible — already debited.
+        onSuccess()
+        return
+      }
+      if (status === 'failed') {
+        throw new Error(data.displayText ?? 'Charge failed.')
+      }
+      setPhase({
+        kind: 'awaiting',
+        reference: data.reference,
+        displayText: data.displayText ?? null,
+        startedAt: Date.now(),
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const restart = () => {
+    setPhase({ kind: 'form' })
+    setError(null)
+  }
+
+  if (phase.kind === 'awaiting') {
+    return (
+      <AwaitingPrompt
+        provider={PROVIDERS.find((p) => p.key === provider)!}
+        phone={phone}
+        amount={amount}
+        currency={currency}
+        displayText={phase.displayText}
+        onCancel={restart}
+      />
+    )
+  }
+
+  if (phase.kind === 'failed') {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+        <div className="flex items-start gap-2 text-destructive">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <p className="text-sm font-semibold">{phase.reason}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={restart}
+            className="flex-1 h-10"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Try again
+          </Button>
+          {onSwitchToCard && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onSwitchToCard}
+              className="flex-1 h-10"
+            >
+              Use card instead
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div>
+        <label className="text-eyebrow text-muted-foreground block mb-2">
+          Mobile-money network
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {PROVIDERS.map((p) => {
+            const selected = provider === p.key
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setProvider(p.key)}
+                className={`relative py-3 rounded-xl border-2 text-xs font-bold transition-all ${
+                  selected
+                    ? `${p.brand} shadow-card-pressed`
+                    : 'bg-secondary text-foreground border-border hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-card'
+                }`}
+              >
+                <span className="block text-[10px] uppercase tracking-wide opacity-80">
+                  {p.short}
+                </span>
+                <span className="block text-[11px] font-bold mt-0.5 whitespace-nowrap">
+                  {p.label}
+                </span>
+                {selected && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-foreground text-background flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-eyebrow text-muted-foreground block mb-2">
+          Mobile-money phone number
+        </label>
+        <div className="relative">
+          <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="tel"
+            inputMode="numeric"
+            placeholder="0244XXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="pl-9 h-12 bg-secondary border-border font-mono tabular-nums"
+            autoComplete="tel"
+            required
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1.5">
+          You&apos;ll get a prompt on this phone to approve {currency} {amount.toFixed(2)}.
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <Button
+        type="submit"
+        disabled={submitting}
+        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+      >
+        {submitting ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Sending prompt…
+          </>
+        ) : (
+          `Pay ${currency} ${amount.toFixed(2)} with ${PROVIDERS.find((p) => p.key === provider)?.short}`
+        )}
+      </Button>
+
+      {onSwitchToCard && (
+        <button
+          type="button"
+          onClick={onSwitchToCard}
+          className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        >
+          Pay with card instead
+        </button>
+      )}
+    </form>
+  )
+}
+
+function AwaitingPrompt({
+  provider,
+  phone,
+  amount,
+  currency,
+  displayText,
+  onCancel,
+}: {
+  provider: ProviderOption
+  phone: string
+  amount: number
+  currency: string
+  displayText: string | null
+  onCancel: () => void
+}) {
+  const fallback =
+    provider.key === 'vod'
+      ? 'Dial *422# on your Telecel line to generate an approval code, then approve the request there.'
+      : `Check ${phone} for an MMO prompt and enter your PIN to approve ${currency} ${amount.toFixed(2)}.`
+  return (
+    <div className="space-y-4 text-center">
+      <div className="relative w-16 h-16 mx-auto">
+        <div aria-hidden className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl" />
+        <div className="relative w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-card">
+          <Smartphone className="w-8 h-8 text-primary" />
+        </div>
+        <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+          <Loader2 className="w-3 h-3 animate-spin" />
+        </span>
+      </div>
+      <div>
+        <p className="text-sm font-bold text-foreground">
+          Check your phone
+        </p>
+        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+          {displayText ?? fallback}
+        </p>
+      </div>
+      <div className="rounded-xl bg-secondary/60 border border-border p-3 text-left space-y-1.5">
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Network</span>
+          <span className="font-bold text-foreground">{provider.label}</span>
+        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Phone</span>
+          <span className="font-mono text-foreground">{phone}</span>
+        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Amount</span>
+          <span className="font-bold text-foreground tabular-nums">
+            {currency} {amount.toFixed(2)}
+          </span>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        We&apos;ll update this page as soon as you approve. The prompt usually arrives within 30 seconds.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onCancel}
+        className="w-full h-10"
+      >
+        Cancel and start over
+      </Button>
+    </div>
+  )
+}
+
+function friendlyFailure(status: string): string {
+  switch (status) {
+    case 'failed':
+      return 'The mobile-money charge was declined. Check your balance and try again.'
+    case 'abandoned':
+      return 'The prompt was dismissed before you approved it. Try again.'
+    case 'amount-mismatch':
+      return 'The amount we received doesn\'t match. Contact support.'
+    case 'verify-failed':
+      return 'We couldn\'t reach the gateway to confirm your payment. Try again in a moment.'
+    case 'credit-failed':
+      return 'Payment confirmed but we couldn\'t credit your wallet. Contact support — we have the transaction reference.'
+    default:
+      return `Payment didn't complete (${status}). Try again or contact support.`
+  }
+}

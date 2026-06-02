@@ -92,6 +92,68 @@ export async function initialiseTransaction(input: {
   return body.data
 }
 
+export type MobileMoneyProvider = 'mtn' | 'vod' | 'atl'
+
+export interface PaystackChargeResponse {
+  reference: string
+  // Possible values include: success, pending, pay_offline, send_otp,
+  // send_pin, send_phone, send_birthday, failed, abandoned.
+  status: string
+  display_text?: string
+  message?: string
+  amount?: number
+  currency?: string
+}
+
+/**
+ * Charge a Ghana mobile-money wallet via Paystack's /charge endpoint. The
+ * user is prompted on their phone (USSD or in-app) to approve the debit.
+ * Caller is expected to poll /transaction/verify (or our /momo/status route)
+ * to learn when the charge resolves.
+ *
+ * Provider codes: 'mtn' = MTN MoMo, 'vod' = Telecel (ex-Vodafone), 'atl' = AirtelTigo.
+ */
+export async function chargeMobileMoney(input: {
+  email: string
+  amount: number // major units
+  currency: 'GHS'
+  reference: string
+  phone: string
+  provider: MobileMoneyProvider
+  metadata?: Record<string, unknown>
+}): Promise<PaystackChargeResponse> {
+  const res = await fetch('https://api.paystack.co/charge', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getSecretKey()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: input.email,
+      amount: toMinorUnits(input.amount, input.currency),
+      currency: input.currency,
+      reference: input.reference,
+      mobile_money: {
+        phone: input.phone,
+        provider: input.provider,
+      },
+      metadata: input.metadata ?? {},
+    }),
+    cache: 'no-store',
+  })
+  const body = (await res.json().catch(() => ({}))) as {
+    status?: boolean
+    message?: string
+    data?: PaystackChargeResponse
+  }
+  if (!res.ok || !body.status || !body.data) {
+    throw new Error(
+      `Paystack charge failed: ${body.message ?? `HTTP ${res.status}`}`,
+    )
+  }
+  return body.data
+}
+
 export async function verifyTransaction(
   reference: string,
 ): Promise<PaystackVerifyResponse> {

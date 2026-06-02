@@ -49,6 +49,7 @@ import {
   type CurrencyCode,
 } from '@/lib/countries'
 import { openPaystackPopup } from '@/lib/paystack-inline'
+import { MobileMoneyForm } from '@/components/payments/mobile-money-form'
 
 interface UserProfile {
   id: string
@@ -766,35 +767,54 @@ function MePageInner() {
                       ? 'You\'ll see our bank details and upload your payment proof on the next page. Admin credits your wallet once verified.'
                       : countryCfg.gateway === 'moolre'
                         ? 'You\'ll be redirected to Moolre to pay. Your balance is credited within a few minutes of payment.'
-                        : 'The Paystack checkout opens right here. Your balance is credited automatically once the payment confirms.'}
+                        : country === 'GH'
+                          ? 'Pay instantly with MTN MoMo, Telecel Cash or AirtelTigo Money — your wallet is credited automatically once you approve.'
+                          : 'The Paystack checkout opens right here. Your balance is credited automatically once the payment confirms.'}
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  onClick={() => void startVerificationDeposit()}
-                  disabled={verifyLoading}
-                  className="w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-bold"
-                >
-                  {verifyLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {countryCfg.gateway === 'paystack' && country === 'GH' ? (
+                  <MobileMoneyForm
+                    userId={profile.id}
+                    amount={verificationAmount}
+                    currency={currency}
+                    defaultPhone={profile.phone ?? null}
+                    purpose="verification"
+                    onSuccess={async () => {
+                      setDepositToast({ kind: 'success', text: 'Deposit credited. Welcome back!' })
+                      await loadProfile()
+                    }}
+                    onSwitchToCard={() => void startVerificationDeposit()}
+                  />
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={() => void startVerificationDeposit()}
+                      disabled={verifyLoading}
+                      className="w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-bold"
+                    >
+                      {verifyLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {countryCfg.gateway === 'manual'
+                            ? 'Opening…'
+                            : countryCfg.gateway === 'paystack'
+                              ? 'Opening checkout…'
+                              : 'Redirecting…'}
+                        </>
+                      ) : countryCfg.gateway === 'manual' ? (
+                        `Pay ${currency} ${verificationAmount} via bank transfer`
+                      ) : (
+                        `Pay ${currency} ${verificationAmount} to verify`
+                      )}
+                    </Button>
+                    <p className="text-[11px] text-center text-muted-foreground">
                       {countryCfg.gateway === 'manual'
-                        ? 'Opening…'
-                        : countryCfg.gateway === 'paystack'
-                          ? 'Opening checkout…'
-                          : 'Redirecting…'}
-                    </>
-                  ) : countryCfg.gateway === 'manual' ? (
-                    `Pay ${currency} ${verificationAmount} via bank transfer`
-                  ) : (
-                    `Pay ${currency} ${verificationAmount} to verify`
-                  )}
-                </Button>
-                <p className="text-[11px] text-center text-muted-foreground">
-                  {countryCfg.gateway === 'manual'
-                    ? 'Bank transfer · Admin credits your wallet after verifying the screenshot.'
-                    : `Secured by ${countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'}. Funds are credited to your wallet balance.`}
-                </p>
+                        ? 'Bank transfer · Admin credits your wallet after verifying the screenshot.'
+                        : `Secured by ${countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'}. Funds are credited to your wallet balance.`}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
             <form onSubmit={submitWithdraw} className="space-y-4">
