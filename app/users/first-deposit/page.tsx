@@ -31,6 +31,7 @@ import {
   type CountryCode,
   type CurrencyCode,
 } from '@/lib/countries'
+import { openPaystackPopup } from '@/lib/paystack-inline'
 
 interface UserProfile {
   id: string
@@ -215,12 +216,63 @@ function DepositForm() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) {
+      if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      // Full-page redirect to the gateway's hosted checkout. The user pays
-      // on their page and is sent back to /users/first-deposit?moolre=… or
-      // ?paystack=… depending on the gateway.
+
+      // Paystack: open the Inline JS popup so card collection happens in
+      // Paystack's iframe (no PCI scope for us) without leaving the page.
+      // Moolre still uses the legacy full-page redirect.
+      if (gateway === 'paystack') {
+        if (!data.publicKey) {
+          throw new Error('Paystack public key not configured on server')
+        }
+        await openPaystackPopup({
+          publicKey: data.publicKey,
+          email: data.email,
+          amountMinor: data.amountMinor,
+          reference: data.reference,
+          currency: data.currency,
+          metadata: { userId: profile.id, purpose },
+          onSuccess: async (reference) => {
+            try {
+              const vres = await fetch('/api/payments/paystack/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ reference }),
+              })
+              const vdata = await vres.json().catch(() => ({}))
+              if (!vres.ok || !vdata.ok) {
+                setError(
+                  `Payment received but verification failed (${vdata.status ?? vres.status}). Refresh your account in a moment.`,
+                )
+                setLoading(false)
+                return
+              }
+              // Pull fresh totals so the success card shows the new balance.
+              const me = await fetch(`/api/users/${profile.id}`, { cache: 'no-store' })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null)
+              if (me) setProfile(me)
+              saveUserSession(profile.id)
+              setShowSuccess(true)
+              setLoading(false)
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err))
+              setLoading(false)
+            }
+          },
+          onClose: () => {
+            setLoading(false)
+          },
+        })
+        return
+      }
+
+      // Moolre flow keeps the redirect for now.
+      if (!data.url) {
+        throw new Error('gateway did not return a redirect URL')
+      }
       window.location.href = data.url as string
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -387,7 +439,7 @@ function DepositForm() {
                       ? 'Pay with MTN, Telecel or AT Money on Moolre.'
                       : gateway === 'manual'
                         ? 'Send a bank transfer to the account below, then upload your payment proof.'
-                        : `Pay with card or bank on Paystack (${countryCfg.name}).`}
+                        : `Pay securely with card or bank — the checkout opens right here.`}
                     {' '}Minimum deposit: <span className="text-foreground font-semibold">{currency} {minAmount}</span>.
                   </p>
                 </div>
@@ -538,17 +590,18 @@ function DepositForm() {
                           After you upload your proof, an admin will verify the payment and credit your{' '}
                           <strong className="text-foreground">wallet</strong> shortly.
                         </>
-                      ) : (
+                      ) : gateway === 'moolre' ? (
                         <>
                           You&apos;ll be redirected to{' '}
-                          <span className="font-semibold text-foreground">
-                            {gateway === 'moolre' ? 'Moolre' : 'Paystack'}
-                          </span>{' '}
-                          to pay.
-                          {gateway === 'moolre'
-                            ? ' Your balance is credited within a few minutes of payment — check '
-                            : ' Your balance is credited automatically once the payment confirms — check '}
+                          <span className="font-semibold text-foreground">Moolre</span>{' '}
+                          to pay. Your balance is credited within a few minutes of payment — check{' '}
                           <strong className="text-foreground">My Account</strong> after.
+                        </>
+                      ) : (
+                        <>
+                          The{' '}
+                          <span className="font-semibold text-foreground">Paystack</span>{' '}
+                          checkout opens right here — your balance is credited automatically once the payment confirms.
                         </>
                       )}
                     </span>
@@ -562,7 +615,11 @@ function DepositForm() {
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {gateway === 'manual' ? 'Uploading…' : 'Redirecting…'}
+                        {gateway === 'manual'
+                          ? 'Uploading…'
+                          : gateway === 'paystack'
+                            ? 'Opening checkout…'
+                            : 'Redirecting…'}
                       </>
                     ) : gateway === 'manual' ? (
                       `Submit proof for ${currency} ${Number(amount || 0).toFixed(2)}`

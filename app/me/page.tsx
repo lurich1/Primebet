@@ -48,6 +48,7 @@ import {
   type CountryCode,
   type CurrencyCode,
 } from '@/lib/countries'
+import { openPaystackPopup } from '@/lib/paystack-inline'
 
 interface UserProfile {
   id: string
@@ -352,9 +353,52 @@ function MePageInner() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) {
+      if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
+
+      if (countryCfg.gateway === 'paystack') {
+        if (!data.publicKey) {
+          throw new Error('Paystack public key not configured on server')
+        }
+        await openPaystackPopup({
+          publicKey: data.publicKey,
+          email: data.email,
+          amountMinor: data.amountMinor,
+          reference: data.reference,
+          currency: data.currency,
+          metadata: { userId: profile.id, purpose: 'verification' },
+          onSuccess: async (reference) => {
+            try {
+              const vres = await fetch('/api/payments/paystack/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ reference }),
+              })
+              const vdata = await vres.json().catch(() => ({}))
+              if (!vres.ok || !vdata.ok) {
+                setDepositToast({
+                  kind: 'failed',
+                  text: `Verification deposit failed (${vdata.status ?? vres.status}). Try again.`,
+                })
+              } else {
+                setDepositToast({ kind: 'success', text: 'Deposit credited. Welcome back!' })
+                await loadProfile()
+              }
+            } catch (err) {
+              setVerifyError(err instanceof Error ? err.message : String(err))
+            } finally {
+              setVerifyLoading(false)
+            }
+          },
+          onClose: () => {
+            setVerifyLoading(false)
+          },
+        })
+        return
+      }
+
+      if (!data.url) throw new Error('gateway did not return a redirect URL')
       window.location.href = data.url as string
     } catch (err) {
       setVerifyError(err instanceof Error ? err.message : String(err))
@@ -722,7 +766,7 @@ function MePageInner() {
                       ? 'You\'ll see our bank details and upload your payment proof on the next page. Admin credits your wallet once verified.'
                       : countryCfg.gateway === 'moolre'
                         ? 'You\'ll be redirected to Moolre to pay. Your balance is credited within a few minutes of payment.'
-                        : 'You\'ll be redirected to Paystack to pay. Your balance is credited automatically once the payment confirms.'}
+                        : 'The Paystack checkout opens right here. Your balance is credited automatically once the payment confirms.'}
                   </span>
                 </div>
                 <Button
@@ -734,7 +778,11 @@ function MePageInner() {
                   {verifyLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {countryCfg.gateway === 'manual' ? 'Opening…' : 'Redirecting…'}
+                      {countryCfg.gateway === 'manual'
+                        ? 'Opening…'
+                        : countryCfg.gateway === 'paystack'
+                          ? 'Opening checkout…'
+                          : 'Redirecting…'}
                     </>
                   ) : countryCfg.gateway === 'manual' ? (
                     `Pay ${currency} ${verificationAmount} via bank transfer`

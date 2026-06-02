@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
-import { initialiseTransaction } from '@/lib/paystack'
+import { getPaystackPublicKey, initialiseTransaction, toMinorUnits } from '@/lib/paystack'
 import { getMinFirstDeposit } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
@@ -98,8 +98,19 @@ export async function POST(request: Request) {
         userName: user.name,
       },
     })
+    // We return everything Inline JS needs (publicKey + amount in minor
+    // units + currency + email + reference) plus the hosted-page URL as a
+    // fallback for any caller that still does a full-page redirect.
     return NextResponse.json(
-      { url: init.authorization_url, reference: init.reference },
+      {
+        url: init.authorization_url,
+        reference: init.reference,
+        accessCode: init.access_code,
+        publicKey: getPaystackPublicKey(),
+        amountMinor: toMinorUnits(amount, user.currency),
+        currency: user.currency,
+        email: placeholderEmail,
+      },
       { status: 201 },
     )
   } catch (e) {
