@@ -24,6 +24,7 @@ interface DepositRow {
   currency: string
   provider: string
   status: 'pending' | 'success' | 'failed' | 'cancelled'
+  type: 'deposit' | 'withdrawal'
   source: string | null
   note: string | null
   failureReason: string | null
@@ -56,14 +57,16 @@ interface DepositsResponse {
   deposits: DepositRow[]
   userRollup: UserRollup[]
   totals: {
-    successCount: number
-    /** Per-currency totals, e.g. { GHS: 5000, NGN: 30000 }. */
-    successAmountByCurrency: Record<string, number>
+    successDepositCount: number
+    successWithdrawalCount: number
+    successDepositByCurrency: Record<string, number>
+    successWithdrawalByCurrency: Record<string, number>
   }
 }
 
 type View = 'users' | 'transactions'
 type StatusFilter = 'all' | 'success' | 'failed' | 'pending'
+type TypeFilter = 'all' | 'deposit' | 'withdrawal'
 
 export default function AdminDepositsPage() {
   const [data, setData] = useState<DepositsResponse | null>(null)
@@ -72,6 +75,7 @@ export default function AdminDepositsPage() {
   const [search, setSearch] = useState('')
   const [view, setView] = useState<View>('users')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [resolvingId, setResolvingId] = useState<string | null>(null)
 
   const load = async () => {
@@ -96,6 +100,7 @@ export default function AdminDepositsPage() {
     if (!data) return [] as DepositRow[]
     const q = search.trim().toLowerCase()
     return data.deposits.filter((d) => {
+      if (typeFilter !== 'all' && d.type !== typeFilter) return false
       if (statusFilter !== 'all' && d.status !== statusFilter) return false
       if (!q) return true
       return (
@@ -106,12 +111,13 @@ export default function AdminDepositsPage() {
         (d.user?.phone?.toLowerCase().includes(q) ?? false)
       )
     })
-  }, [data, search, statusFilter])
+  }, [data, search, statusFilter, typeFilter])
 
   const statusCounts = useMemo(() => {
     if (!data) return { all: 0, success: 0, failed: 0, pending: 0 }
     return data.deposits.reduce(
       (acc, d) => {
+        if (typeFilter !== 'all' && d.type !== typeFilter) return acc
         acc.all += 1
         if (d.status === 'success') acc.success += 1
         else if (d.status === 'failed' || d.status === 'cancelled') acc.failed += 1
@@ -119,6 +125,19 @@ export default function AdminDepositsPage() {
         return acc
       },
       { all: 0, success: 0, failed: 0, pending: 0 },
+    )
+  }, [data, typeFilter])
+
+  const typeCounts = useMemo(() => {
+    if (!data) return { all: 0, deposit: 0, withdrawal: 0 }
+    return data.deposits.reduce(
+      (acc, d) => {
+        acc.all += 1
+        if (d.type === 'deposit') acc.deposit += 1
+        else acc.withdrawal += 1
+        return acc
+      },
+      { all: 0, deposit: 0, withdrawal: 0 },
     )
   }, [data])
 
@@ -164,10 +183,10 @@ export default function AdminDepositsPage() {
     <div className="p-4 sm:p-6 space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-title font-bold tracking-tight">Deposits</h1>
+          <h1 className="text-title font-bold tracking-tight">Payments</h1>
           <p className="text-sm text-muted-foreground">
-            All player deposits — Moolre top-ups and admin credits. Newest
-            first.
+            All player deposits and withdrawals — gateway top-ups, admin
+            credits, and payouts. Newest first.
           </p>
         </div>
         <Button
@@ -197,11 +216,16 @@ export default function AdminDepositsPage() {
 
       {data && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Kpi
-              icon={<Receipt className="w-4 h-4 text-primary" />}
+              icon={<Receipt className="w-4 h-4 text-success" />}
               label="Successful deposits"
-              value={data.totals.successCount.toString()}
+              value={data.totals.successDepositCount.toString()}
+            />
+            <Kpi
+              icon={<Receipt className="w-4 h-4 text-destructive" />}
+              label="Successful withdrawals"
+              value={data.totals.successWithdrawalCount.toString()}
             />
             <Kpi
               icon={<Users className="w-4 h-4 text-primary" />}
@@ -209,21 +233,23 @@ export default function AdminDepositsPage() {
               value={data.userRollup.length.toString()}
             />
           </div>
-          {Object.keys(data.totals.successAmountByCurrency).length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-4 shadow-card">
-              <p className="text-eyebrow text-muted-foreground mb-2.5 flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-success" /> Total deposited by currency
-              </p>
-              <div className="flex flex-wrap gap-4">
-                {Object.entries(data.totals.successAmountByCurrency).map(([cur, total]) => (
-                  <div key={cur} className="flex items-baseline gap-1.5">
-                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{cur}</span>
-                    <span className="text-base font-extrabold tabular-nums tracking-tight">
-                      {formatMoney(total, cur)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {(Object.keys(data.totals.successDepositByCurrency).length > 0 ||
+            Object.keys(data.totals.successWithdrawalByCurrency).length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.keys(data.totals.successDepositByCurrency).length > 0 && (
+                <CurrencyTotals
+                  label="Deposited"
+                  iconClass="text-success"
+                  totals={data.totals.successDepositByCurrency}
+                />
+              )}
+              {Object.keys(data.totals.successWithdrawalByCurrency).length > 0 && (
+                <CurrencyTotals
+                  label="Withdrawn"
+                  iconClass="text-destructive"
+                  totals={data.totals.successWithdrawalByCurrency}
+                />
+              )}
             </div>
           )}
         </div>
@@ -259,29 +285,48 @@ export default function AdminDepositsPage() {
       </div>
 
       {view === 'transactions' && (
-        <div className="flex flex-wrap gap-2">
-          <StatusPill
-            active={statusFilter === 'all'}
-            onClick={() => setStatusFilter('all')}
-            label={`All (${statusCounts.all})`}
-          />
-          <StatusPill
-            active={statusFilter === 'success'}
-            onClick={() => setStatusFilter('success')}
-            label={`Verified (${statusCounts.success})`}
-          />
-          <StatusPill
-            active={statusFilter === 'failed'}
-            onClick={() => setStatusFilter('failed')}
-            label={`Failed (${statusCounts.failed})`}
-            tone="bad"
-          />
-          <StatusPill
-            active={statusFilter === 'pending'}
-            onClick={() => setStatusFilter('pending')}
-            label={`Pending (${statusCounts.pending})`}
-            tone="warn"
-          />
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <StatusPill
+              active={typeFilter === 'all'}
+              onClick={() => setTypeFilter('all')}
+              label={`All (${typeCounts.all})`}
+            />
+            <StatusPill
+              active={typeFilter === 'deposit'}
+              onClick={() => setTypeFilter('deposit')}
+              label={`Deposits (${typeCounts.deposit})`}
+            />
+            <StatusPill
+              active={typeFilter === 'withdrawal'}
+              onClick={() => setTypeFilter('withdrawal')}
+              label={`Withdrawals (${typeCounts.withdrawal})`}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <StatusPill
+              active={statusFilter === 'all'}
+              onClick={() => setStatusFilter('all')}
+              label={`All (${statusCounts.all})`}
+            />
+            <StatusPill
+              active={statusFilter === 'success'}
+              onClick={() => setStatusFilter('success')}
+              label={`Verified (${statusCounts.success})`}
+            />
+            <StatusPill
+              active={statusFilter === 'failed'}
+              onClick={() => setStatusFilter('failed')}
+              label={`Failed (${statusCounts.failed})`}
+              tone="bad"
+            />
+            <StatusPill
+              active={statusFilter === 'pending'}
+              onClick={() => setStatusFilter('pending')}
+              label={`Pending (${statusCounts.pending})`}
+              tone="warn"
+            />
+          </div>
         </div>
       )}
 
@@ -335,12 +380,15 @@ export default function AdminDepositsPage() {
             {filteredDeposits.map((d) => {
               const isFailed = d.status === 'failed' || d.status === 'cancelled'
               const isPending = d.status === 'pending'
-              const canResolve = (isFailed || isPending) && d.user
+              // Resolve flow is deposit-only — there's no "credit user" path
+              // for a withdrawal row.
+              const canResolve = (isFailed || isPending) && d.user && d.type === 'deposit'
               return (
                 <li key={d.id} className="px-4 py-3 hover:bg-secondary/30 transition-colors">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5 text-xs flex-wrap">
+                        <TypeBadge type={d.type} />
                         <StatusBadge status={d.status} />
                         <SourceBadge source={d.source} provider={d.provider} />
                         <span className="font-mono text-[10px] text-muted-foreground truncate">
@@ -392,11 +440,19 @@ export default function AdminDepositsPage() {
                               ? 'text-destructive'
                               : isPending
                                 ? 'text-amber-600'
-                                : 'text-success'
+                                : d.type === 'withdrawal'
+                                  ? 'text-destructive'
+                                  : 'text-success'
                           }`}
                         >
-                          {isFailed ? '✕' : isPending ? '…' : '+'} {d.currency}{' '}
-                          {formatMoney(d.amount, d.currency)}
+                          {isFailed
+                            ? '✕'
+                            : isPending
+                              ? '…'
+                              : d.type === 'withdrawal'
+                                ? '−'
+                                : '+'}{' '}
+                          {d.currency} {formatMoney(d.amount, d.currency)}
                         </p>
                       </div>
                       {canResolve && (
@@ -524,6 +580,48 @@ function FailureReason({ metadata }: { metadata: DepositRow }) {
           : ''}
       </span>
     </p>
+  )
+}
+
+function TypeBadge({ type }: { type: DepositRow['type'] }) {
+  const cls =
+    type === 'deposit'
+      ? 'bg-success/15 text-success border-success/30'
+      : 'bg-destructive/15 text-destructive border-destructive/30'
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold uppercase ${cls}`}
+    >
+      {type}
+    </span>
+  )
+}
+
+function CurrencyTotals({
+  label,
+  iconClass,
+  totals,
+}: {
+  label: string
+  iconClass: string
+  totals: Record<string, number>
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+      <p className="text-eyebrow text-muted-foreground mb-2.5 flex items-center gap-1.5">
+        <TrendingUp className={`w-3.5 h-3.5 ${iconClass}`} /> Total {label.toLowerCase()} by currency
+      </p>
+      <div className="flex flex-wrap gap-4">
+        {Object.entries(totals).map(([cur, total]) => (
+          <div key={cur} className="flex items-baseline gap-1.5">
+            <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{cur}</span>
+            <span className="text-base font-extrabold tabular-nums tracking-tight">
+              {formatMoney(total, cur)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

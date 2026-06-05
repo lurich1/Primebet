@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
-import { listAllPayments } from '@/lib/payments-store'
+import { listAllPayments, type PaymentType } from '@/lib/payments-store'
 import { listUsersForAdmin } from '@/lib/users-store'
 
 export const dynamic = 'force-dynamic'
@@ -11,13 +11,19 @@ async function isAdminAuthenticated(): Promise<boolean> {
   return isValidSessionCookie(store.get(ADMIN_COOKIE)?.value)
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
+  // `?type=deposit|withdrawal` filters server-side. Omitting it returns
+  // every payment so the page can group them with a client-side pill.
+  const typeParam = new URL(request.url).searchParams.get('type')
+  const typeFilter: PaymentType | undefined =
+    typeParam === 'deposit' || typeParam === 'withdrawal' ? typeParam : undefined
+
   const [payments, users] = await Promise.all([
-    listAllPayments({ type: 'deposit', limit: 1000 }),
+    listAllPayments({ type: typeFilter, limit: 1000 }),
     listUsersForAdmin(),
   ])
 
@@ -46,6 +52,7 @@ export async function GET() {
       currency: p.currency,
       provider: p.provider,
       status: p.status,
+      type: p.type,
       source, // 'admin_credit' | 'manual_upload' | null
       note,
       failureReason,
@@ -83,7 +90,7 @@ export async function GET() {
     }
   >()
   for (const d of deposits) {
-    if (!d.user || d.status !== 'success') continue
+    if (!d.user || d.status !== 'success' || d.type !== 'deposit') continue
     const prev = byUser.get(d.user.id)
     if (prev) {
       prev.depositCount += 1
@@ -106,23 +113,39 @@ export async function GET() {
     a.lastDepositAt < b.lastDepositAt ? 1 : -1,
   )
 
-  // Per-currency totals so the dashboard can show distinct rows for each
-  // wallet currency instead of summing GHS+NGN+KES+ZAR into nonsense.
-  const successAmountByCurrency: Record<string, number> = {}
-  let successCount = 0
+  // Per-currency totals split by type so the dashboard shows distinct rows
+  // for each wallet currency AND separates deposits from withdrawals instead
+  // of summing them into nonsense.
+  const successDepositByCurrency: Record<string, number> = {}
+  const successWithdrawalByCurrency: Record<string, number> = {}
+  let successDepositCount = 0
+  let successWithdrawalCount = 0
   for (const d of deposits) {
     if (d.status !== 'success') continue
-    successCount += 1
     const cur = d.currency || 'GHS'
-    successAmountByCurrency[cur] = +((successAmountByCurrency[cur] ?? 0) + d.amount).toFixed(2)
+    if (d.type === 'withdrawal') {
+      successWithdrawalCount += 1
+      successWithdrawalByCurrency[cur] = +((successWithdrawalByCurrency[cur] ?? 0) + d.amount).toFixed(2)
+    } else {
+      successDepositCount += 1
+      successDepositByCurrency[cur] = +((successDepositByCurrency[cur] ?? 0) + d.amount).toFixed(2)
+    }
   }
 
   return NextResponse.json({
+    payments: deposits,
+    // Legacy alias so any older client that still reads `deposits` keeps working.
     deposits,
     userRollup,
     totals: {
-      successCount,
-      successAmountByCurrency,
+      // Legacy success* fields kept pointing at deposit numbers so the existing
+      // "Successful deposits" KPI doesn't drop to 0 mid-rollout.
+      successCount: successDepositCount,
+      successAmountByCurrency: successDepositByCurrency,
+      successDepositCount,
+      successWithdrawalCount,
+      successDepositByCurrency,
+      successWithdrawalByCurrency,
     },
   })
 }
