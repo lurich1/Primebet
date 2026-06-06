@@ -16,6 +16,7 @@ import {
   Building2,
   Hourglass,
   Lock,
+  ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,12 +51,13 @@ interface UserProfile {
 type PayMode = 'momo' | 'card'
 
 // Nigeria "Pay with Korapay" multi-step flow:
+//   select → user picks the "Pay with Korapay" method
 //   amount → user enters how much to deposit, presses Next
 //   pay    → account number to copy shown immediately, with a 3-minute
 //            payment-window countdown running on the same screen. "I have
 //            paid" fires the Telegram operator-approval start route (same
 //            credit pipeline as before).
-type KorapayStep = 'amount' | 'pay'
+type KorapayStep = 'select' | 'amount' | 'pay'
 
 // Length of the on-screen "complete your payment within" countdown, in seconds.
 const KORAPAY_CONNECT_SECONDS = 180
@@ -112,7 +114,7 @@ function DepositForm() {
   const [manualSubmitted, setManualSubmitted] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   // Korapay multi-step state (Nigeria manual gateway only).
-  const [korapayStep, setKorapayStep] = useState<KorapayStep>('amount')
+  const [korapayStep, setKorapayStep] = useState<KorapayStep>('select')
   const [korapayCountdown, setKorapayCountdown] = useState(KORAPAY_CONNECT_SECONDS)
 
   useEffect(() => {
@@ -389,9 +391,9 @@ function DepositForm() {
           <div aria-hidden className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
           <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
-          {/* "Secured by Kora" floats above the card on the Korapay pay step,
-              matching Korapay's hosted checkout. */}
-          {gateway === 'manual' && korapayStep === 'pay' && profile && (
+          {/* "Secured by Kora" floats above the card on the Korapay select /
+              pay steps, matching Korapay's hosted checkout. */}
+          {gateway === 'manual' && (korapayStep === 'select' || korapayStep === 'pay') && profile && (
             <div className="relative mb-3">
               <SecuredByKora />
             </div>
@@ -459,6 +461,34 @@ function DepositForm() {
                 >
                   View account
                 </Button>
+              </div>
+            ) : gateway === 'manual' && korapayStep === 'select' && profile ? (
+              <div className="space-y-5">
+                <div className="text-center space-y-2">
+                  <KorapayBrand />
+                  <h1 className="text-title font-bold tracking-tight">Choose how to pay</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Select a payment method to fund your wallet.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null)
+                    setKorapayStep('amount')
+                  }}
+                  className="w-full flex items-center gap-3 rounded-xl border border-[#1B4DFF]/30 bg-[#1B4DFF]/5 hover:bg-[#1B4DFF]/10 p-4 text-left transition-colors"
+                >
+                  <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[#1B4DFF] text-white font-extrabold text-base shrink-0">
+                    k
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold text-foreground">Pay with Korapay</span>
+                    <span className="block text-[11px] text-muted-foreground">Bank transfer · approved in minutes</span>
+                  </span>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+                </button>
               </div>
             ) : gateway === 'manual' && korapayStep === 'pay' && profile ? (
               <div className="space-y-5">
@@ -730,7 +760,19 @@ function DepositForm() {
                   </Button>
 
                   {gateway === 'manual' ? (
-                    <SecuredByKora />
+                    <>
+                      <SecuredByKora />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null)
+                          setKorapayStep('select')
+                        }}
+                        className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                      >
+                        ← Change payment method
+                      </button>
+                    </>
                   ) : (
                     <p className="text-center text-[11px] text-muted-foreground">
                       Secured by {gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account
