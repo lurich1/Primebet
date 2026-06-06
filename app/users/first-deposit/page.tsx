@@ -15,6 +15,7 @@ import {
   Check,
   Building2,
   Hourglass,
+  Lock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,14 +50,25 @@ interface UserProfile {
 type PayMode = 'momo' | 'card'
 
 // Nigeria "Pay with Korapay" multi-step flow:
-//   amount  → user enters how much to deposit
-//   connecting → branded 3-minute "Connecting to Korapay…" countdown
-//   pay     → account number to copy + "I have paid" (fires the Telegram
-//             operator-approval start route, same credit pipeline as before)
-type KorapayStep = 'amount' | 'connecting' | 'pay'
+//   amount → user enters how much to deposit, presses Next
+//   pay    → account number to copy shown immediately, with a 3-minute
+//            payment-window countdown running on the same screen. "I have
+//            paid" fires the Telegram operator-approval start route (same
+//            credit pipeline as before).
+type KorapayStep = 'amount' | 'pay'
 
-// Length of the forced "Connecting to Korapay…" wait, in seconds.
+// Length of the on-screen "complete your payment within" countdown, in seconds.
 const KORAPAY_CONNECT_SECONDS = 180
+
+// NG users deposit in NGN (their wallet currency — that's what gets credited
+// and what commission is computed on) but settle the Korapay transfer in GHS
+// to a Ghana account. This is the NGN->GHS rate — adjust it as FX moves.
+// Strongly implied by the reference flow: ₦30,000 ≈ GHS 300, i.e. ₦100 ≈ GHS 1.
+const NGN_PER_GHS = 100
+function ngnToGhs(ngn: number) {
+  if (!Number.isFinite(ngn) || ngn <= 0) return 0
+  return +(ngn / NGN_PER_GHS).toFixed(2)
+}
 
 // Hard-coded Nigeria manual-deposit bank details — shown to NG players on the
 // Korapay copy-and-pay step. Keep in sync with whatever account the operator
@@ -126,14 +138,11 @@ function DepositForm() {
     }
   }, [userId])
 
-  // Drive the "Connecting to Korapay…" countdown. Ticks once a second while
-  // on the connecting step; when it hits zero we advance to the pay step.
+  // Drive the on-screen payment-window countdown. Ticks once a second while
+  // on the pay step; stops at zero (the user can still confirm payment).
   useEffect(() => {
-    if (korapayStep !== 'connecting') return
-    if (korapayCountdown <= 0) {
-      setKorapayStep('pay')
-      return
-    }
+    if (korapayStep !== 'pay') return
+    if (korapayCountdown <= 0) return
     const t = setTimeout(() => setKorapayCountdown((s) => s - 1), 1000)
     return () => clearTimeout(t)
   }, [korapayStep, korapayCountdown])
@@ -227,12 +236,12 @@ function DepositForm() {
     }
 
     if (gateway === 'manual') {
-      // NG "Pay with Korapay" flow: kick off the branded connecting
-      // countdown. We don't notify the operator yet — that only happens once
-      // the user has actually transferred and taps "I have paid" on the pay
-      // step (handleKorapayPaid below).
+      // NG "Pay with Korapay" flow: show the account number immediately and
+      // start the on-screen payment-window countdown there. We don't notify
+      // the operator yet — that only happens once the user has transferred
+      // and taps "I have paid" on the pay step (handleKorapayPaid below).
       setKorapayCountdown(KORAPAY_CONNECT_SECONDS)
-      setKorapayStep('connecting')
+      setKorapayStep('pay')
       return
     }
 
@@ -443,52 +452,30 @@ function DepositForm() {
                   View account
                 </Button>
               </div>
-            ) : gateway === 'manual' && korapayStep === 'connecting' && profile ? (
-              <div className="text-center space-y-5">
-                <KorapayBrand />
-                <div className="relative w-16 h-16 mx-auto">
-                  <div aria-hidden className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl" />
-                  <div className="relative w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-card">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <h1 className="text-title font-bold tracking-tight">Connecting to Korapay…</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Securing your payment session. Please keep this page open.
-                  </p>
-                </div>
-                <div className="mx-auto inline-flex items-baseline gap-1 rounded-xl bg-secondary/60 border border-border px-5 py-3 shadow-card">
-                  <span className="text-3xl font-extrabold tabular-nums text-foreground">
-                    {formatCountdown(korapayCountdown)}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-medium">remaining</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setKorapayStep('amount')
-                    setKorapayCountdown(KORAPAY_CONNECT_SECONDS)
-                  }}
-                  className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                >
-                  Cancel
-                </button>
-              </div>
             ) : gateway === 'manual' && korapayStep === 'pay' && profile ? (
               <div className="space-y-5">
+                <SecuredByKora />
                 <div className="text-center space-y-2">
                   <KorapayBrand />
                   <h1 className="text-title font-bold tracking-tight">
-                    Pay {currency} {formatMoney(Number(amount) || 0, currency)}
+                    Pay GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     Transfer exactly{' '}
                     <span className="font-bold text-foreground tabular-nums">
-                      {currency} {formatMoney(Number(amount) || 0, currency)}
+                      GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
                     </span>{' '}
                     to the account below, then tap <span className="font-semibold text-foreground">I have paid</span>.
                   </p>
+                </div>
+
+                {/* On-screen payment-window countdown */}
+                <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-secondary/60 border border-border px-4 py-1.5 shadow-card">
+                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                  <span className="text-xs text-muted-foreground font-medium">Complete payment within</span>
+                  <span className="text-sm font-extrabold tabular-nums text-foreground">
+                    {formatCountdown(korapayCountdown)}
+                  </span>
                 </div>
 
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -514,6 +501,15 @@ function DepositForm() {
                     value={MANUAL_BANK_DETAILS_NG.accountName}
                     copied={copiedField === 'name'}
                     onCopy={() => copyValue('name', MANUAL_BANK_DETAILS_NG.accountName)}
+                  />
+                </div>
+
+                <div className="bg-secondary/60 border border-border rounded-xl p-3">
+                  <Row
+                    label="You'll be credited"
+                    value={`${currency} ${formatMoney(Number(amount) || 0, currency)}`}
+                    tone="good"
+                    bold
                   />
                 </div>
 
@@ -549,6 +545,8 @@ function DepositForm() {
                 >
                   ← Start over
                 </button>
+
+                <SecuredByKora />
               </div>
             ) : (
               <>
@@ -695,6 +693,21 @@ function DepositForm() {
                       ))}
                   </div>
 
+                  {gateway === 'manual' && (
+                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-eyebrow text-muted-foreground">You&apos;ll transfer</span>
+                        <span className="text-xl font-extrabold tabular-nums text-foreground">
+                          GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Pay in GHS to a Ghana account; your wallet is credited in {currency}.
+                        Rate: GHS&nbsp;1&nbsp;=&nbsp;{currency}&nbsp;{NGN_PER_GHS}.
+                      </p>
+                    </div>
+                  )}
+
                   {error && (
                     <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -713,13 +726,15 @@ function DepositForm() {
                         {gateway === 'paystack' ? 'Opening checkout…' : 'Redirecting…'}
                       </>
                     ) : gateway === 'manual' ? (
-                      'Pay with Korapay'
+                      'Next'
                     ) : (
                       `Pay ${currency} ${Number(amount || 0).toFixed(2)}`
                     )}
                   </Button>
 
-                  {gateway !== 'manual' && (
+                  {gateway === 'manual' ? (
+                    <SecuredByKora />
+                  ) : (
                     <p className="text-center text-[11px] text-muted-foreground">
                       Secured by {gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account
                     </p>
@@ -753,6 +768,21 @@ function KorapayBrand() {
       <span className="w-2 h-2 rounded-full bg-primary" />
       <span className="text-xs font-bold tracking-tight text-foreground">
         kora<span className="text-primary">pay</span>
+      </span>
+    </div>
+  )
+}
+
+// "Secured by Kora" trust badge — matches Korapay's hosted checkout (teal
+// padlock + wordmark). Shown top and bottom of the pay screen.
+function SecuredByKora() {
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500">
+        <Lock className="w-2.5 h-2.5 text-white" />
+      </span>
+      <span className="text-[11px] font-medium text-muted-foreground">
+        Secured by <span className="font-bold text-foreground">Kora</span>
       </span>
     </div>
   )
