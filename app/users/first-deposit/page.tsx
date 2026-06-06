@@ -389,6 +389,14 @@ function DepositForm() {
           <div aria-hidden className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
           <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
+          {/* "Secured by Kora" floats above the card on the Korapay pay step,
+              matching Korapay's hosted checkout. */}
+          {gateway === 'manual' && korapayStep === 'pay' && profile && (
+            <div className="relative mb-3">
+              <SecuredByKora />
+            </div>
+          )}
+
           <div className="relative bg-card rounded-2xl border border-border p-5 sm:p-8 shadow-card">
             {showSuccess && profile ? (
               <div className="text-center space-y-4">
@@ -454,7 +462,6 @@ function DepositForm() {
               </div>
             ) : gateway === 'manual' && korapayStep === 'pay' && profile ? (
               <div className="space-y-5">
-                <SecuredByKora />
                 <div className="text-center space-y-2">
                   <KorapayBrand />
                   <h1 className="text-title font-bold tracking-tight">
@@ -770,7 +777,7 @@ function KorapayBrand() {
 function SecuredByKora() {
   return (
     <div className="flex items-center justify-center gap-1.5">
-      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500">
+      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#1B4DFF]">
         <Lock className="w-2.5 h-2.5 text-white" />
       </span>
       <span className="text-[11px] font-medium text-muted-foreground">
