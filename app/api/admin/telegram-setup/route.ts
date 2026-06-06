@@ -36,6 +36,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ webhookUrl, telegram: data })
   }
 
+  // ?check=1 — calls getMe to verify the token is valid. Reports just
+  // the bot identity and the token's length / first-3 / last-3 chars so
+  // the operator can confirm Vercel actually has what they pasted
+  // without exposing the secret to the browser.
+  if (url.searchParams.get('check') === '1') {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+    const data = await res.json().catch(() => ({}))
+    return NextResponse.json({
+      tokenLength: token.length,
+      tokenStart: token.slice(0, 3),
+      tokenEnd: token.slice(-3),
+      hasWhitespace: token !== token.trim() || /\s/.test(token),
+      telegram: data,
+    })
+  }
+
   if (url.searchParams.get('delete') === '1') {
     const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
       method: 'POST',
