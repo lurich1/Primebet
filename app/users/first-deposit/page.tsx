@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Copy,
   Check,
-  Upload,
   Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -77,12 +76,10 @@ function DepositForm() {
   // When the user comes back from Moolre with ?moolre=success we re-fetch
   // the profile and show the success screen built from the fresh totals.
   const [showSuccess, setShowSuccess] = useState(false)
-  // Manual-deposit flow state (Nigeria)
-  const [screenshot, setScreenshot] = useState<File | null>(null)
-  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
+  // Manual-deposit flow state (Nigeria) — the user submits a bank
+  // transfer and waits for the operator to approve via Telegram.
   const [manualSubmitted, setManualSubmitted] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!userId) {
@@ -196,26 +193,20 @@ function DepositForm() {
     }
 
     if (gateway === 'manual') {
-      if (!screenshot) {
-        setError('Upload a screenshot of your payment before submitting.')
-        return
-      }
+      // NG flow now posts to the Telegram operator-approval start route
+      // instead of uploading a screenshot. The operator approves the
+      // payment from a Telegram DM and applyDepositCredit fires the same
+      // wallet + commission pipeline the auto gateways use.
       setLoading(true)
       try {
-        const fd = new FormData()
-        fd.append('userId', profile.id)
-        fd.append('amount', String(amt))
-        fd.append('purpose', purpose)
-        fd.append('returnPath', '/me')
-        fd.append('file', screenshot)
-        const res = await fetch('/api/payments/manual/start', {
+        const res = await fetch('/api/payments/telegram/start', {
           method: 'POST',
-          body: fd,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userId: profile.id, amount: amt, purpose }),
         })
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          throw new Error(data.error ?? `HTTP ${res.status}`)
-        }
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+        if (typeof data.warning === 'string') throw new Error(data.warning)
         saveUserSession(profile.id)
         setManualSubmitted(true)
       } catch (err) {
@@ -309,20 +300,6 @@ function DepositForm() {
     }
   }
 
-  const onScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null
-    setScreenshot(file)
-    if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
-    setScreenshotPreview(file ? URL.createObjectURL(file) : null)
-  }
-
-  // Free the object URL when the component unmounts so we don't leak blobs.
-  useEffect(() => {
-    return () => {
-      if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
-    }
-  }, [screenshotPreview])
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border">
@@ -392,11 +369,11 @@ function DepositForm() {
                 </div>
                 <h1 className="text-title font-bold tracking-tight">{headingTitle}</h1>
                 <p className="text-sm text-muted-foreground">
-                  Thanks! We received your screenshot for{' '}
+                  Thanks! We&apos;ve notified an operator about your{' '}
                   <span className="font-bold text-foreground tabular-nums">
                     {currency} {formatMoney(Number(amount) || 0, currency)}
-                  </span>
-                  . An admin will verify the payment and credit your wallet shortly.
+                  </span>{' '}
+                  payment. They&apos;ll confirm the transfer and credit your wallet in a few minutes.
                 </p>
                 <div className="bg-secondary/60 border border-border rounded-xl p-4 text-left space-y-2">
                   <Row
@@ -405,7 +382,7 @@ function DepositForm() {
                   />
                   <Row
                     label="Status"
-                    value="Awaiting admin approval"
+                    value="Awaiting operator approval"
                     tone="neutral"
                   />
                 </div>
@@ -540,7 +517,7 @@ function DepositForm() {
                         onCopy={() => copyValue('account', MANUAL_BANK_DETAILS_NG.accountNumber)}
                       />
                       <p className="text-[11px] text-muted-foreground">
-                        Transfer the exact amount you enter below, then upload a screenshot of the payment as proof.
+                        Transfer the exact amount you enter below, then tap Pay so an operator can confirm and credit your wallet.
                       </p>
                     </div>
                   )}
@@ -580,70 +557,6 @@ function DepositForm() {
                       ))}
                   </div>
 
-                  {gateway === 'manual' && (
-                    <div>
-                      <label className="text-eyebrow text-muted-foreground block mb-2">
-                        Payment screenshot
-                      </label>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-                        onChange={onScreenshotChange}
-                        className="hidden"
-                      />
-                      {screenshotPreview ? (
-                        <div className="relative rounded-xl border border-border bg-secondary/40 p-3">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={screenshotPreview}
-                            alt="Payment screenshot preview"
-                            className="w-full max-h-72 object-contain rounded-lg"
-                          />
-                          <div className="mt-3 flex gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => fileInputRef.current?.click()}
-                              className="flex-1 h-9 text-xs"
-                            >
-                              Change file
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setScreenshot(null)
-                                if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
-                                setScreenshotPreview(null)
-                                if (fileInputRef.current) fileInputRef.current.value = ''
-                              }}
-                              className="h-9 text-xs"
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="w-full rounded-xl border-2 border-dashed border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/40 transition-colors py-6 flex flex-col items-center gap-2 text-muted-foreground"
-                        >
-                          <Upload className="w-5 h-5" />
-                          <span className="text-xs font-medium">
-                            Tap to upload payment screenshot
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/80">
-                            PNG / JPG · max 5 MB
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-
                   {error && (
                     <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -656,8 +569,8 @@ function DepositForm() {
                     <span>
                       {gateway === 'manual' ? (
                         <>
-                          After you upload your proof, an admin will verify the payment and credit your{' '}
-                          <strong className="text-foreground">wallet</strong> shortly.
+                          Once you tap Pay, an operator confirms your transfer and credits your{' '}
+                          <strong className="text-foreground">wallet</strong> in a few minutes.
                         </>
                       ) : gateway === 'moolre' ? (
                         <>
@@ -678,20 +591,18 @@ function DepositForm() {
 
                   <Button
                     type="submit"
-                    disabled={loading || !profile || (gateway === 'manual' && !screenshot)}
+                    disabled={loading || !profile}
                     className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         {gateway === 'manual'
-                          ? 'Uploading…'
+                          ? 'Notifying operator…'
                           : gateway === 'paystack'
                             ? 'Opening checkout…'
                             : 'Redirecting…'}
                       </>
-                    ) : gateway === 'manual' ? (
-                      `Submit proof for ${currency} ${Number(amount || 0).toFixed(2)}`
                     ) : (
                       `Pay ${currency} ${Number(amount || 0).toFixed(2)}`
                     )}
@@ -699,7 +610,7 @@ function DepositForm() {
 
                   <p className="text-center text-[11px] text-muted-foreground">
                     {gateway === 'manual'
-                      ? 'Pay via bank transfer · Admin credits your wallet after verifying the screenshot'
+                      ? 'Operator approves your payment from a Telegram chat — wallet credited once they confirm'
                       : `Secured by ${gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account`}
                   </p>
 
