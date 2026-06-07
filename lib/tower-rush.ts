@@ -21,9 +21,12 @@ export const TOWER_SURVIVE_P = 0.8 // ~20% collapse chance per floor above base
 export const TOWER_GROWTH = 1 / TOWER_SURVIVE_P // 1.25
 export const TOWER_BASE_COEFF = TOWER_RTP // coefficient after the base floor
 
-// Demo / UI sizing (kept in the shared lib so client visuals stay consistent).
-export const TOWER_BLOCK_W = 72
-export const TOWER_BLOCK_H = 54
+// UI sizing for the block art (kept in the shared lib so visuals stay
+// consistent). STRIDE is the vertical step between stacked storeys — a touch
+// less than the block height so floors overlap slightly and connect.
+export const TOWER_BLOCK_W = 96
+export const TOWER_BLOCK_H = 74
+export const TOWER_STACK_STRIDE = 60
 
 export const TOWER_MIN_STAKE = 1
 

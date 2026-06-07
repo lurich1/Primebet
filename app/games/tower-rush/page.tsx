@@ -18,6 +18,7 @@ import {
   TOWER_BLOCK_H,
   TOWER_BLOCK_W,
   TOWER_MIN_STAKE,
+  TOWER_STACK_STRIDE,
   towerCoeffAt,
 } from '@/lib/tower-rush'
 
@@ -240,7 +241,7 @@ export default function TowerRushPage() {
     setBet(Math.max(TOWER_MIN_STAKE, Math.min(balance || Infinity, v)))
   }
 
-  const scrollOffset = Math.max(0, (floor - VISIBLE_FLOORS) * TOWER_BLOCK_H)
+  const scrollOffset = Math.max(0, (floor - VISIBLE_FLOORS) * TOWER_STACK_STRIDE)
   const minCoeff = towerCoeffAt(1)
 
   return (
@@ -324,10 +325,7 @@ export default function TowerRushPage() {
           <Skyline />
 
           <div className="absolute top-3 left-3 z-20 select-none">
-            <div className="font-extrabold leading-none drop-shadow-[0_2px_0_rgba(0,0,0,0.25)]">
-              <div className="text-2xl sm:text-3xl text-[#ffd54a] tracking-tight" style={{ WebkitTextStroke: '1.5px #1f3a93' }}>TOWER</div>
-              <div className="text-xl sm:text-2xl text-white tracking-[0.2em]" style={{ WebkitTextStroke: '1.5px #1f3a93' }}>RUSH</div>
-            </div>
+            <Image src="/tower-logo.png" alt="Tower Rush" width={120} height={120} priority className="w-20 sm:w-24 h-auto drop-shadow-lg" />
           </div>
 
           {/* Crane + hanging next block */}
@@ -364,7 +362,9 @@ export default function TowerRushPage() {
                 key={i}
                 className={`tr-block-in ${crashed ? 'tr-fall' : ''}`}
                 style={{
-                  marginTop: i === 0 ? 0 : 2,
+                  // Overlap each storey slightly so the tower reads as one
+                  // connected building.
+                  marginTop: i === 0 ? 0 : TOWER_STACK_STRIDE - TOWER_BLOCK_H,
                   // First floor drops at normal speed; every floor after snaps
                   // in fast.
                   animationDuration: crashed ? undefined : i === 0 ? '0.28s' : '0.12s',
@@ -500,45 +500,19 @@ export default function TowerRushPage() {
 
 // ---- Presentational bits --------------------------------------------------
 
-// Each floor uses a different building material so the tower looks varied as
-// it climbs (cycled by floor index).
-const TOWER_MATERIALS = [
-  { body: 'repeating-linear-gradient(0deg,#b0432e 0 12px,#9c3a27 12px 13px), #a83f2b', ring: '#7d2e1e', glass: '#f3ead3', frame: '#cdbf9e' }, // red brick
-  { body: 'repeating-linear-gradient(0deg,#cda35c 0 12px,#bb9149 12px 13px), #c59b51', ring: '#8a6a2f', glass: '#fff6df', frame: '#9c8048' }, // sandstone
-  { body: 'repeating-linear-gradient(0deg,#8a93a6 0 12px,#767f91 12px 13px), #828b9e', ring: '#5b6373', glass: '#eef2f8', frame: '#aab3c2' }, // grey stone
-  { body: 'repeating-linear-gradient(0deg,#4f7bd6 0 12px,#3f6ac4 12px 13px), #4a73cf', ring: '#2f4f9c', glass: '#eaf1ff', frame: '#b9c9ef' }, // steel blue
-  { body: 'repeating-linear-gradient(0deg,#2f9e6b 0 12px,#268a5c 12px 13px), #2c945f', ring: '#1f6f49', glass: '#e7fff2', frame: '#9fd9bd' }, // emerald
-  { body: 'repeating-linear-gradient(0deg,#c77b3a 0 12px,#b56c30 12px 13px), #be7335', ring: '#8a5020', glass: '#fff0db', frame: '#d8ab74' }, // amber wood
-]
+// Real game block art. (More variants can be added and cycled by index.)
+const TOWER_BLOCK_IMAGES = ['/build-tool-one.png']
 
 function BrickBlock({ index = 0 }: { index?: number }) {
-  const m = TOWER_MATERIALS[((index % TOWER_MATERIALS.length) + TOWER_MATERIALS.length) % TOWER_MATERIALS.length]
+  const src = TOWER_BLOCK_IMAGES[((index % TOWER_BLOCK_IMAGES.length) + TOWER_BLOCK_IMAGES.length) % TOWER_BLOCK_IMAGES.length]
   return (
     <div className="relative" style={{ width: TOWER_BLOCK_W, height: TOWER_BLOCK_H }}>
-      {/* Facade */}
-      <div
-        className="absolute inset-0 flex items-center justify-center overflow-hidden"
-        style={{
-          borderRadius: 5,
-          background: m.body,
-          boxShadow: `inset 0 0 0 3px ${m.ring}, 0 3px 4px rgba(0,0,0,0.35)`,
-        }}
-      >
-        {/* Depth shading: lit on the left, shadowed on the right */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent 40%,rgba(0,0,0,0.22))' }} />
-        {/* Round window */}
-        <div
-          className="relative w-7 h-7 rounded-full flex items-center justify-center"
-          style={{ background: m.glass, border: `3px solid ${m.frame}`, boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.25)' }}
-        >
-          <div className="w-full h-[3px]" style={{ background: m.frame }} />
-          <div className="absolute w-[3px] h-7" style={{ background: m.frame }} />
-        </div>
-      </div>
-      {/* Cornice / ledge — slightly wider, sits on top of the storey */}
-      <div
-        className="absolute -top-1 left-1/2 -translate-x-1/2 rounded-sm"
-        style={{ width: TOWER_BLOCK_W + 8, height: 6, background: m.frame, boxShadow: '0 1px 2px rgba(0,0,0,0.35)' }}
+      <Image
+        src={src}
+        alt=""
+        fill
+        sizes="96px"
+        className="object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)]"
       />
     </div>
   )
