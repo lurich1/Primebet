@@ -322,19 +322,30 @@ export default function TowerRushPage() {
             style={{ opacity: Math.min(floor / 16, 1) * 0.7, transition: 'opacity .4s ease-out' }}
           />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-24 w-40 h-40 rounded-full bg-yellow-200/70 blur-2xl" />
+
+          {/* Soft clouds */}
+          <Cloud className="top-10 left-[12%] w-24 h-8" />
+          <Cloud className="top-24 left-[60%] w-32 h-10" />
+          <Cloud className="top-40 left-[28%] w-20 h-7 opacity-80" />
+
           <Skyline />
 
           <div className="absolute top-3 left-3 z-20 select-none">
             <Image src="/tower-logo.png" alt="Tower Rush" width={120} height={120} priority className="w-20 sm:w-24 h-auto drop-shadow-lg" />
           </div>
 
-          {/* Crane + hanging next block (over the right-side column) */}
-          <div className="absolute top-0 left-[63%] -translate-x-1/2 z-20 flex flex-col items-center">
-            <div className="w-40 h-1.5 bg-[#3a4a63] rounded-b" />
-            <div className="w-1 h-6 bg-[#2b3850]" />
+          {/* Crane + hanging next block (centered over the column) */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+            {/* arm + counterweight */}
+            <div className="relative w-44 h-2 bg-gradient-to-b from-[#48566f] to-[#2f3c52] rounded-b shadow-md">
+              <div className="absolute -left-1 top-0 w-3 h-3 bg-[#febb3c] rounded-sm" />
+            </div>
+            <div className="w-1.5 h-5 bg-[#2b3850]" />
+            {/* hook pulley */}
+            <div className="w-3 h-2 rounded-sm bg-[#febb3c] border border-[#3a2a00]" />
             {!crashed && (
               <div className="tr-sway flex flex-col items-center">
-                <div className="w-0.5 h-8 bg-[#1f2a3d]" />
+                <div className="w-0.5 h-7 bg-[#1f2a3d]" />
                 <BrickBlock index={floor} />
               </div>
             )}
@@ -350,11 +361,11 @@ export default function TowerRushPage() {
             </div>
           )}
 
-          <div className="absolute left-[63%] -translate-x-1/2 bottom-6 z-10"><Shop /></div>
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-10"><Shop /></div>
 
           {/* Stacked tower (right-side column) */}
           <div
-            className="absolute left-[63%] z-10"
+            className="absolute left-1/2 z-10"
             style={{ bottom: 86, transform: `translate(-50%, ${scrollOffset}px)`, transition: 'transform .3s ease-out' }}
           >
             {Array.from({ length: floor }).map((_, i) => (
@@ -532,37 +543,99 @@ function BrickBlock({ index = 0 }: { index?: number }) {
   )
 }
 
-function Shop() {
+// Soft fluffy cloud (a few overlapping blurred blobs).
+function Cloud({ className = '' }: { className?: string }) {
   return (
-    <div className="flex flex-col items-center">
-      <div className="text-[10px] font-bold text-[#5a3a1a] bg-[#e8c98a] px-3 rounded-t-md border border-[#5a3a1a]/40">Tower Rush</div>
-      <div className="w-28 h-16 bg-[#2f6b4f] rounded-b-md border-x-4 border-b-4 border-[#234f3b] flex items-end justify-center relative">
-        <div className="absolute -top-1 left-0 right-0 h-2 bg-[repeating-linear-gradient(90deg,#c0392b_0_8px,#ecf0f1_8px_16px)]" />
-        <div className="w-8 h-10 bg-[#1c3d2e] rounded-t-md mb-0" />
+    <div className={`absolute z-0 pointer-events-none ${className}`}>
+      <div className="absolute inset-0 rounded-full bg-white/85 blur-[2px]" />
+      <div className="absolute left-1/4 -top-1/3 w-2/3 h-full rounded-full bg-white/85 blur-[2px]" />
+      <div className="absolute right-0 top-1/4 w-1/2 h-3/4 rounded-full bg-white/80 blur-[2px]" />
+    </div>
+  )
+}
+
+// A single facade with a window grid and an optional striped awning.
+function Building({
+  left, width, height, bottom, color, cols = 3, rows = 3, awning, awningColor = '#c0392b', shadow = true,
+}: {
+  left: string; width: number; height: number; bottom: number; color: string
+  cols?: number; rows?: number; awning?: boolean; awningColor?: string; shadow?: boolean
+}) {
+  return (
+    <div
+      className="absolute rounded-t-sm"
+      style={{ left, width, height, bottom, background: color, boxShadow: shadow ? 'inset -7px 0 0 rgba(0,0,0,0.10), inset 0 4px 0 rgba(255,255,255,0.10)' : undefined }}
+    >
+      {awning && (
+        <div className="absolute -top-2.5 -left-1 -right-1 h-3 rounded-sm shadow-sm"
+          style={{ background: `repeating-linear-gradient(90deg, ${awningColor} 0 10px, #f3efe6 10px 20px)` }} />
+      )}
+      <div className="grid gap-1 p-1.5" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        {Array.from({ length: cols * rows }).map((_, j) => (
+          <div key={j} className="aspect-square rounded-[2px] bg-[#7e94ad]/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)]" />
+        ))}
       </div>
     </div>
   )
 }
 
+// The green "Tower Rush" storefront — the base the tower is built on.
+function Shop() {
+  return (
+    <div className="flex flex-col items-center drop-shadow-[0_6px_6px_rgba(0,0,0,0.25)]">
+      {/* Striped awning + sign */}
+      <div className="relative">
+        <div className="h-3 w-32 rounded-t-md" style={{ background: 'repeating-linear-gradient(90deg,#b8362c 0 9px,#f3efe6 9px 18px)' }} />
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-[#fff2cf] bg-[#7a4a1e] px-2 rounded border border-[#3a2410]">Tower&nbsp;Rush</div>
+      </div>
+      {/* Storefront */}
+      <div className="w-32 h-16 bg-[#2f6b4f] border-x-4 border-b-4 border-[#234f3b] rounded-b-sm flex items-end justify-center gap-1.5 px-2 relative">
+        <div className="absolute inset-x-1 top-1 h-5 rounded-sm bg-[#8fd0b2]/40 border border-[#234f3b]/60" />
+        <div className="w-7 h-9 bg-[#1c3d2e] rounded-t-sm border border-[#163026]" />
+        <div className="w-5 h-7 bg-[#8fd0b2]/50 rounded-sm border border-[#234f3b]/60 mb-0" />
+      </div>
+    </div>
+  )
+}
+
+// Original cartoon street scene behind the tower — distant skyline, two
+// flanking storefront rows with awnings, a lamp post, a picket fence, a paved
+// street and a dirt cross-section.
 function Skyline() {
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-44 z-0">
-      <div className="absolute bottom-0 left-0 right-0 h-16 bg-[#b9a98a]" />
-      {[
-        { l: '4%', w: 80, h: 110, c: '#c9c2b6' },
-        { l: '16%', w: 60, h: 90, c: '#d7d0c4' },
-        { l: '70%', w: 90, h: 120, c: '#cfc7ba' },
-        { l: '84%', w: 70, h: 100, c: '#bcb4a6' },
-      ].map((b, i) => (
-        <div key={i} className="absolute bottom-12 rounded-t-sm" style={{ left: b.l, width: b.w, height: b.h, background: b.c }}>
-          <div className="grid grid-cols-3 gap-1 p-1.5">
-            {Array.from({ length: 9 }).map((_, j) => (
-              <div key={j} className="aspect-square bg-[#8aa0b8]/60 rounded-[2px]" />
-            ))}
-          </div>
-        </div>
-      ))}
-      <div className="absolute bottom-0 left-0 right-0 h-3 bg-[#6b4f33]" />
+    <div className="absolute bottom-0 left-0 right-0 h-56 z-0 pointer-events-none">
+      {/* Distant skyline */}
+      <Building left="2%" width={70} height={120} bottom={70} color="#cfc7ba" cols={3} rows={4} shadow={false} />
+      <Building left="12%" width={54} height={92} bottom={70} color="#d8d1c5" cols={2} rows={3} shadow={false} />
+      <Building left="80%" width={64} height={110} bottom={70} color="#d2cabd" cols={3} rows={4} shadow={false} />
+      <Building left="90%" width={60} height={88} bottom={70} color="#c7bfb2" cols={2} rows={3} shadow={false} />
+
+      {/* Front storefronts (left & right of the shop) */}
+      <Building left="0%" width={120} height={88} bottom={40} color="#bfc6cc" cols={3} rows={2} />
+      <Building left="20%" width={70} height={70} bottom={40} color="#c9b79b" cols={2} rows={2} awning awningColor="#caa24a" />
+      <Building left="70%" width={84} height={96} bottom={40} color="#b8a7c4" cols={3} rows={3} awning awningColor="#b8362c" />
+      <Building left="88%" width={96} height={78} bottom={40} color="#c5b59a" cols={3} rows={2} awning awningColor="#caa24a" />
+
+      {/* Lamp post (left of centre) */}
+      <div className="absolute" style={{ left: '40%', bottom: 40 }}>
+        <div className="w-1.5 h-24 bg-gradient-to-b from-[#4a3a26] to-[#2e2417] rounded-t" />
+        <div className="absolute -top-1 -left-2.5 w-6 h-3.5 rounded-md bg-[#f2c94c] shadow-[0_0_14px_4px_rgba(242,201,76,0.55)]" />
+      </div>
+
+      {/* Picket fence */}
+      <div className="absolute left-0 right-0" style={{ bottom: 30, height: 16, background: 'repeating-linear-gradient(90deg,#cda775 0 11px,#b88f52 11px 13px)' }} />
+
+      {/* Paved street */}
+      <div className="absolute left-0 right-0" style={{ bottom: 24, height: 8, background: 'linear-gradient(#a9a9a9,#8f8f8f)' }} />
+
+      {/* Dirt cross-section */}
+      <div className="absolute left-0 right-0 bottom-0 h-6 overflow-hidden" style={{ background: 'linear-gradient(#6b4f33,#4a3624)' }}>
+        {[
+          ['10%', 3], ['24%', 5], ['38%', 4], ['52%', 6], ['66%', 4], ['80%', 5], ['92%', 3],
+        ].map(([l, s], i) => (
+          <span key={i} className="absolute rounded-full bg-[#3a2a1b]" style={{ left: l as string, bottom: 4 + (i % 2) * 6, width: s as number, height: s as number }} />
+        ))}
+      </div>
     </div>
   )
 }
