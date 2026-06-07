@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { listPaymentsForUser } from '@/lib/payments-store'
 import { readBetsForUser } from '@/lib/bets-store'
+import { recentRoundsForUser } from '@/lib/tower-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,9 +40,10 @@ export async function GET(
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
   }
 
-  const [payments, bets] = await Promise.all([
+  const [payments, bets, towerRounds] = await Promise.all([
     listPaymentsForUser(userId).catch(() => []),
     readBetsForUser(userId).catch(() => []),
+    recentRoundsForUser(userId).catch(() => []),
   ])
 
   const transactions: TransactionItem[] = []
@@ -106,6 +108,44 @@ export async function GET(
         reference: b.code,
         description: `Bet lost — ${firstMatch}${more}`,
         meta: { code: b.code, totalOdds: b.totalOdds },
+      })
+    }
+  }
+
+  // Tower Rush game rounds — reuse the bet-* kinds so the history UI renders
+  // them with the same icons/filters; the description marks them as the game.
+  for (const r of towerRounds) {
+    transactions.push({
+      id: `tower-${r.id}-stake`,
+      kind: 'bet-placed',
+      amount: -r.stake,
+      currency: r.currency,
+      status: 'success',
+      createdAt: r.placedAt,
+      description: 'Tower Rush — stake',
+      meta: { game: 'tower-rush', floor: r.currentFloor },
+    })
+    if (r.status === 'won' && r.settledAt) {
+      transactions.push({
+        id: `tower-${r.id}-win`,
+        kind: 'bet-won',
+        amount: r.payout ?? 0,
+        currency: r.currency,
+        status: 'success',
+        createdAt: r.settledAt,
+        description: `Tower Rush — win x${r.coeff.toFixed(2)}`,
+        meta: { game: 'tower-rush', coeff: r.coeff },
+      })
+    } else if (r.status === 'lost' && r.settledAt) {
+      transactions.push({
+        id: `tower-${r.id}-loss`,
+        kind: 'bet-lost',
+        amount: 0,
+        currency: r.currency,
+        status: 'success',
+        createdAt: r.settledAt,
+        description: 'Tower Rush — collapsed',
+        meta: { game: 'tower-rush' },
       })
     }
   }

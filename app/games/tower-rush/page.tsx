@@ -1,107 +1,106 @@
 'use client'
 
-// Tower Rush — a Galaxsys-style "crash" tower-builder, recreated as a
-// self-contained client-side DEMO (FUN money, no real wallet yet).
+// Tower Rush — Galaxsys-style "crash" tower-builder wired to the real wallet.
 //
-// Mechanic:
-//   - Place a bet, press BUILD to lay the base floor (coefficient starts at
-//     x0.4 — the game's minimum).
-//   - Each extra BUILD stacks another brick floor and multiplies the
-//     coefficient. Every floor above the base carries a collapse risk.
-//   - CASH OUT any time to bank bet × current coefficient. If the tower
-//     collapses first, the stake is lost. Max win is uncapped.
-//
-// The crash floor is drawn up-front from a geometric distribution so a round
-// is decided at BUILD-time, not by animation timing.
+// All outcomes are decided server-side (app/api/games/tower-rush): the stake is
+// debited on BUILD-from-idle (start), each extra BUILD asks the server whether
+// the floor survives, and CASH OUT credits stake × coefficient. The crash floor
+// is committed (hash shown) at start and revealed at settle, so it's provably
+// fair and can't be predicted or forced from the client.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Info, Menu, Minus, Plus, X } from 'lucide-react'
+import { ArrowLeft, Info, Menu, Minus, Plus, ShieldCheck, X } from 'lucide-react'
+import { getUserId } from '@/lib/user-session'
+import { formatMoney } from '@/lib/format-money'
+import {
+  TOWER_BLOCK_H,
+  TOWER_BLOCK_W,
+  TOWER_MIN_STAKE,
+  towerCoeffAt,
+} from '@/lib/tower-rush'
 
-// ---- Tunables -------------------------------------------------------------
-const START_BALANCE = 100000 // FUN
-const BASE_COEFF = 0.4 // coefficient after the base floor (the game minimum)
-const GROWTH = 1.28 // coefficient multiplier per extra floor
-const SURVIVE_P = 0.8 // chance each risky floor survives (→ ~20% collapse)
-const BLOCK_W = 72
-const BLOCK_H = 54
-const VISIBLE_FLOORS = 5 // floors kept in frame before the tower scrolls down
+const VISIBLE_FLOORS = 5
+const RESET_MS = 1500
 
 type Phase = 'idle' | 'building' | 'crashed' | 'cashed'
 type Tab = 'players' | 'history' | 'top'
 
-interface HistoryRow {
-  id: number
-  coeff: number
-  bet: number
-  win: number
-  won: boolean
-}
-interface PlayerRow {
-  id: string
-  bet: number
-  win: number
-  time: string
-}
+interface HistoryRow { id: number; coeff: number; stake: number; payout: number; won: boolean }
+interface PlayerRow { id: string; bet: number; win: number; time: string }
+interface Fairness { hash: string | null; seed: string | null; crashFloor: number | null }
 
-const fmt = (n: number) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-// coefficient after `floors` floors placed (floors >= 1)
-const coeffAt = (floors: number) =>
-  floors <= 0 ? 0 : +(BASE_COEFF * Math.pow(GROWTH, floors - 1)).toFixed(2)
-
-// Draw the floor at which the tower collapses (>= 2, base floor is always safe)
-function genCrashFloor() {
-  let f = 2
-  while (Math.random() < SURVIVE_P) f++
-  return f
-}
+const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const coeffStr = (n: number) => n.toFixed(2)
 
 const maskId = () => {
   const a = Math.floor(10 + Math.random() * 89)
-  const b = String.fromCharCode(65 + Math.floor(Math.random() * 26))
-  const c = Math.random() < 0.5 ? Math.floor(10 + Math.random() * 89) : `${b}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`
-  return `${a}***${c}`
+  const tail = Math.random() < 0.5
+    ? Math.floor(10 + Math.random() * 89)
+    : `${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`
+  return `${a}***${tail}`
 }
 
 export default function TowerRushPage() {
-  const [balance, setBalance] = useState(START_BALANCE)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [signedIn, setSignedIn] = useState<boolean | null>(null) // null = unknown/loading
+  const [clientSeed, setClientSeed] = useState('')
+
+  const [balance, setBalance] = useState(0)
+  const [currency, setCurrency] = useState('NGN')
   const [bet, setBet] = useState(100)
+
   const [phase, setPhase] = useState<Phase>('idle')
-  const [floors, setFloors] = useState(0)
-  const [crashFloor, setCrashFloor] = useState(0)
+  const [floor, setFloor] = useState(0)
+  const [coeff, setCoeff] = useState(0)
+  const [roundId, setRoundId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [fairness, setFairness] = useState<Fairness>({ hash: null, seed: null, crashFloor: null })
+
   const [showInfo, setShowInfo] = useState(false)
   const [tab, setTab] = useState<Tab>('players')
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [clock, setClock] = useState(9 * 60 + 13)
-  const roundId = useRef(1)
+  const roundCounter = useRef(1)
 
-  const coeff = floors > 0 ? coeffAt(floors) : 0
   const building = phase === 'building'
+  const crashed = phase === 'crashed'
+  const canBet = (phase === 'idle' || phase === 'crashed' || phase === 'cashed') && !busy
 
-  // Persist the demo balance so a refresh doesn't reset progress.
+  // ── Session + profile ─────────────────────────────────────────────────────
   useEffect(() => {
-    const saved = Number(localStorage.getItem('towerRushBalance'))
-    if (Number.isFinite(saved) && saved > 0) setBalance(saved)
+    setClientSeed(Math.random().toString(36).slice(2) + Date.now().toString(36))
+    const id = getUserId()
+    setUserId(id)
+    if (!id) { setSignedIn(false); return }
+    fetch(`/api/users/${id}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u) {
+          setBalance(Number(u.balance) || 0)
+          if (u.currency) setCurrency(u.currency)
+          setSignedIn(true)
+        } else {
+          setSignedIn(false)
+        }
+      })
+      .catch(() => setSignedIn(false))
   }, [])
-  useEffect(() => {
-    localStorage.setItem('towerRushBalance', String(balance))
-  }, [balance])
 
-  // Ticking clock for the sidebar header.
+  // ── Sidebar clock ───────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setClock((c) => (c + 1) % (24 * 3600)), 1000)
     return () => clearInterval(t)
   }, [])
 
-  // Seed + drift a simulated live-players feed.
+  // ── Simulated live-players feed ──────────────────────────────────────────────
   useEffect(() => {
     const seed = (): PlayerRow => {
       const b = +(5 + Math.random() * 5000).toFixed(2)
-      const mult = Math.random() < 0.55 ? +(0.4 + Math.random() * 4).toFixed(2) : 0
+      const mult = Math.random() < 0.55 ? +(0.97 + Math.random() * 4).toFixed(2) : 0
       return { id: maskId(), bet: b, win: +(b * mult).toFixed(2), time: '09:12' }
     }
     setPlayers(Array.from({ length: 12 }, seed))
@@ -122,65 +121,101 @@ export default function TowerRushPage() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }, [clock])
 
-  const canBet = phase === 'idle' || phase === 'crashed' || phase === 'cashed'
+  const api = useCallback(
+    async (action: string, extra: Record<string, unknown>) => {
+      const res = await fetch('/api/games/tower-rush', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, userId, ...extra }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      return data
+    },
+    [userId],
+  )
 
-  const adjustBet = (delta: number) => {
-    if (!canBet) return
-    setBet((b) => Math.max(1, Math.min(balance, Math.round((b + delta) * 100) / 100)))
-  }
-  const setBetSafe = (v: number) => {
-    if (!canBet) return
-    setBet(Math.max(1, Math.min(balance, v)))
-  }
-
-  // BUILD: start a round, or lay the next floor.
-  const build = useCallback(() => {
-    if (canBet) {
-      if (bet <= 0 || bet > balance) {
-        setMessage('Not enough balance')
-        return
-      }
-      // Start a new round.
-      setBalance((b) => +(b - bet).toFixed(2))
-      setCrashFloor(genCrashFloor())
-      setFloors(1)
-      setPhase('building')
-      setMessage(null)
-      return
-    }
-    if (phase !== 'building') return
-    const next = floors + 1
-    if (next >= crashFloor) {
-      // Collapse — stake already deducted at round start.
-      setFloors(next)
-      setPhase('crashed')
-      setMessage('Tower collapsed!')
-      const id = roundId.current++
-      setHistory((h) => [{ id, coeff: coeffAt(floors), bet, win: 0, won: false }, ...h].slice(0, 40))
-      window.setTimeout(() => {
-        setPhase('idle')
-        setFloors(0)
-        setMessage(null)
-      }, 1300)
-      return
-    }
-    setFloors(next)
-  }, [canBet, bet, balance, phase, floors, crashFloor])
-
-  const cashOut = useCallback(() => {
-    if (phase !== 'building' || floors < 1) return
-    const win = +(bet * coeffAt(floors)).toFixed(2)
-    setBalance((b) => +(b + win).toFixed(2))
-    setPhase('cashed')
-    setMessage(`Cashed out x${coeffAt(floors)} · +${fmt(win)}`)
-    const id = roundId.current++
-    setHistory((h) => [{ id, coeff: coeffAt(floors), bet, win, won: true }, ...h].slice(0, 40))
+  const scheduleReset = useCallback(() => {
     window.setTimeout(() => {
       setPhase('idle')
-      setFloors(0)
+      setFloor(0)
+      setCoeff(0)
+      setRoundId(null)
       setMessage(null)
-    }, 1500)
-  }, [phase, floors, bet])
+    }, RESET_MS)
+  }, [])
+
+  const pushHistory = (row: Omit<HistoryRow, 'id'>) =>
+    setHistory((h) => [{ id: roundCounter.current++, ...row }, ...h].slice(0, 40))
+
+  // BUILD: start a round (debits stake) or place the next floor.
+  const build = useCallback(async () => {
+    if (busy) return
+    if (!userId) { setError('Please sign in to play.'); return }
+    setError(null)
+
+    if (phase === 'idle' || phase === 'crashed' || phase === 'cashed') {
+      if (bet < TOWER_MIN_STAKE || bet > balance) { setError('Not enough balance'); return }
+      setBusy(true)
+      try {
+        const d = await api('start', { stake: bet, clientSeed })
+        setRoundId(d.roundId)
+        setFloor(d.floor)
+        setCoeff(d.coeff)
+        setBalance(d.balance)
+        if (d.currency) setCurrency(d.currency)
+        setFairness({ hash: d.serverSeedHash, seed: null, crashFloor: null })
+        setPhase('building')
+        setMessage(null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
+    if (phase !== 'building' || !roundId) return
+    setBusy(true)
+    try {
+      const d = await api('build', { roundId })
+      if (d.crashed) {
+        setFloor(d.floor)
+        setPhase('crashed')
+        setMessage('Tower collapsed!')
+        setFairness((f) => ({ ...f, seed: d.serverSeed, crashFloor: d.crashFloor }))
+        pushHistory({ coeff, stake: bet, payout: 0, won: false })
+        scheduleReset()
+      } else {
+        setFloor(d.floor)
+        setCoeff(d.coeff)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, userId, phase, bet, balance, clientSeed, roundId, coeff, api, scheduleReset])
+
+  const cashOut = useCallback(async () => {
+    if (busy || phase !== 'building' || !roundId) return
+    setBusy(true)
+    setError(null)
+    try {
+      const d = await api('cashout', { roundId })
+      if (d.balance != null) setBalance(d.balance)
+      setCoeff(d.coeff)
+      setPhase('cashed')
+      setMessage(`Cashed out x${coeffStr(d.coeff)} · +${fmt(d.payout)} ${currency}`)
+      setFairness((f) => ({ ...f, seed: d.serverSeed, crashFloor: d.crashFloor }))
+      pushHistory({ coeff: d.coeff, stake: bet, payout: d.payout, won: true })
+      scheduleReset()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, phase, roundId, api, bet, currency, scheduleReset])
 
   // Keyboard: Space builds, Enter cashes out.
   useEffect(() => {
@@ -192,8 +227,17 @@ export default function TowerRushPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [build, cashOut, building])
 
-  const scrollOffset = Math.max(0, (floors - VISIBLE_FLOORS) * BLOCK_H)
-  const crashed = phase === 'crashed'
+  const adjustBet = (delta: number) => {
+    if (!canBet) return
+    setBet((b) => Math.max(TOWER_MIN_STAKE, Math.min(balance || Infinity, Math.round((b + delta) * 100) / 100)))
+  }
+  const setBetSafe = (v: number) => {
+    if (!canBet) return
+    setBet(Math.max(TOWER_MIN_STAKE, Math.min(balance || Infinity, v)))
+  }
+
+  const scrollOffset = Math.max(0, (floor - VISIBLE_FLOORS) * TOWER_BLOCK_H)
+  const minCoeff = towerCoeffAt(1)
 
   return (
     <div className="min-h-screen bg-[#0e1726] text-white flex flex-col">
@@ -206,27 +250,21 @@ export default function TowerRushPage() {
         .tr-fall { animation: tr-fall .9s ease-in forwards }
       `}</style>
 
-      {/* Top bar */}
       <header className="h-12 px-4 flex items-center justify-between border-b border-white/10 bg-[#0b1220]">
         <Link href="/" className="flex items-center gap-2 text-white/70 hover:text-white text-sm">
           <ArrowLeft className="w-4 h-4" /> Lobby
         </Link>
-        <div className="text-xs text-white/50">Home › Free Demo</div>
+        <div className="text-xs text-white/50">Home › Tower Rush</div>
         <div className="w-16" />
       </header>
 
       <main className="flex-1 w-full max-w-[1100px] mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4">
         {/* ===================== GAME STAGE ===================== */}
         <section className="relative flex-1 rounded-2xl overflow-hidden border border-black/30 shadow-2xl min-h-[460px]">
-          {/* Sky */}
           <div className="absolute inset-0 bg-gradient-to-b from-[#7ec8f0] via-[#a9dcf5] to-[#e9d9b8]" />
-          {/* Sun glow */}
           <div className="absolute left-1/2 -translate-x-1/2 bottom-24 w-40 h-40 rounded-full bg-yellow-200/70 blur-2xl" />
-
-          {/* Skyline */}
           <Skyline />
 
-          {/* Logo */}
           <div className="absolute top-3 left-3 z-20 select-none">
             <div className="font-extrabold leading-none drop-shadow-[0_2px_0_rgba(0,0,0,0.25)]">
               <div className="text-2xl sm:text-3xl text-[#ffd54a] tracking-tight" style={{ WebkitTextStroke: '1.5px #1f3a93' }}>TOWER</div>
@@ -247,32 +285,23 @@ export default function TowerRushPage() {
           </div>
 
           {/* Coefficient readout */}
-          {floors > 0 && (
+          {floor > 0 && (
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 text-center">
-              <div
-                className={`text-5xl sm:text-6xl font-black tabular-nums drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)] ${
-                  crashed ? 'text-red-400' : coeff >= 1 ? 'text-[#8effa1]' : 'text-white'
-                }`}
-              >
-                x{fmt(coeff)}
+              <div className={`text-5xl sm:text-6xl font-black tabular-nums drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)] ${crashed ? 'text-red-400' : coeff >= 1 ? 'text-[#8effa1]' : 'text-white'}`}>
+                x{coeffStr(coeff)}
               </div>
-              {message && (
-                <div className={`mt-1 text-sm font-bold ${crashed ? 'text-red-300' : 'text-[#8effa1]'}`}>{message}</div>
-              )}
+              {message && <div className={`mt-1 text-sm font-bold ${crashed ? 'text-red-300' : 'text-[#8effa1]'}`}>{message}</div>}
             </div>
           )}
 
-          {/* The shop (base of the tower) */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-10">
-            <Shop />
-          </div>
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-10"><Shop /></div>
 
-          {/* Stacked tower (grows up from just above the shop) */}
+          {/* Stacked tower */}
           <div
             className="absolute left-1/2 z-10"
             style={{ bottom: 86, transform: `translate(-50%, ${scrollOffset}px)`, transition: 'transform .3s ease-out' }}
           >
-            {Array.from({ length: floors }).map((_, i) => (
+            {Array.from({ length: floor }).map((_, i) => (
               <div
                 key={i}
                 className={`tr-block-in ${crashed ? 'tr-fall' : ''}`}
@@ -283,84 +312,74 @@ export default function TowerRushPage() {
             ))}
           </div>
 
-          {/* Info button + caption */}
-          <button
-            onClick={() => setShowInfo((s) => !s)}
-            className="absolute bottom-3 right-3 z-30 w-8 h-8 rounded-full bg-white/85 text-[#1f3a93] flex items-center justify-center shadow"
-            aria-label="Game info"
-          >
+          {/* Provably-fair chip */}
+          {fairness.hash && (
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] text-white/70">
+              <ShieldCheck className="w-3 h-3 text-[#8effa1]" /> Provably fair
+            </div>
+          )}
+
+          <button onClick={() => setShowInfo((s) => !s)} className="absolute bottom-3 right-3 z-30 w-8 h-8 rounded-full bg-white/85 text-[#1f3a93] flex items-center justify-center shadow" aria-label="Game info">
             <Info className="w-4 h-4" />
           </button>
 
           {showInfo && (
-            <div className="absolute inset-0 z-40 bg-black/55 flex flex-col items-center justify-center text-center px-6">
-              <button onClick={() => setShowInfo(false)} className="absolute top-3 right-3 text-white/80 hover:text-white">
-                <X className="w-6 h-6" />
-              </button>
-              <div className="w-12 h-12 rounded-full bg-white/90 text-[#1f3a93] flex items-center justify-center mb-4">
-                <Info className="w-6 h-6" />
-              </div>
-              <p className="text-lg font-semibold">
-                Minimum Coefficient: <span className="text-[#ffd54a] font-black">x0.4</span>
-              </p>
-              <p className="text-lg font-semibold">
-                Maximum Win Coefficient: <span className="text-[#ffd54a] font-black">Unlimited</span>
-              </p>
-              <p className="mt-4 max-w-sm text-sm text-white/70">
-                Press <b>BUILD</b> to stack a floor and grow the coefficient. <b>CASH OUT</b> before the tower
-                collapses. Every floor above the base carries a collapse risk.
-              </p>
+            <div className="absolute inset-0 z-40 bg-black/60 flex flex-col items-center justify-center text-center px-6 overflow-y-auto">
+              <button onClick={() => setShowInfo(false)} className="absolute top-3 right-3 text-white/80 hover:text-white"><X className="w-6 h-6" /></button>
+              <div className="w-12 h-12 rounded-full bg-white/90 text-[#1f3a93] flex items-center justify-center mb-4"><Info className="w-6 h-6" /></div>
+              <p className="text-lg font-semibold">Minimum Coefficient: <span className="text-[#ffd54a] font-black">x{coeffStr(minCoeff)}</span></p>
+              <p className="text-lg font-semibold">Maximum Win Coefficient: <span className="text-[#ffd54a] font-black">Unlimited</span></p>
+              <p className="mt-4 max-w-sm text-sm text-white/70">Press <b>BUILD</b> to stack a floor and grow the coefficient. <b>CASH OUT</b> before the tower collapses. Every floor above the base carries a collapse risk.</p>
+              {fairness.hash && (
+                <div className="mt-4 max-w-sm w-full text-left text-[11px] text-white/60 break-all space-y-1 bg-black/30 rounded-lg p-3">
+                  <div><span className="text-white/40">Server seed hash:</span> {fairness.hash}</div>
+                  <div><span className="text-white/40">Client seed:</span> {clientSeed}</div>
+                  {fairness.seed && <div><span className="text-white/40">Server seed (revealed):</span> {fairness.seed}</div>}
+                  {fairness.crashFloor != null && <div><span className="text-white/40">Crash floor:</span> {fairness.crashFloor}</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sign-in gate */}
+          {signedIn === false && (
+            <div className="absolute inset-0 z-40 bg-black/70 flex flex-col items-center justify-center text-center px-6">
+              <p className="text-lg font-bold">Sign in to play Tower Rush</p>
+              <p className="text-sm text-white/60 mt-1">You need a wallet to place real stakes.</p>
+              <Link href="/login" className="mt-4 px-5 h-11 inline-flex items-center rounded-xl bg-[#febb3c] text-[#3a2a00] font-bold">Sign in</Link>
             </div>
           )}
 
           {/* ===================== CONTROLS ===================== */}
           <div className="absolute bottom-0 left-0 right-0 z-30 p-3">
+            {error && (
+              <div className="mx-auto max-w-[560px] mb-2 rounded-lg bg-red-500/20 border border-red-500/40 px-3 py-1.5 text-xs text-red-200">{error}</div>
+            )}
             <div className="mx-auto max-w-[560px] flex items-stretch gap-2">
-              {/* Bet stepper + quick bets */}
               <div className="flex-1 rounded-xl bg-[#11192a]/90 border border-white/10 p-1.5 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between rounded-lg bg-black/30 px-2 py-1.5">
-                  <button onClick={() => adjustBet(-10)} disabled={!canBet} className="w-7 h-7 rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-40 flex items-center justify-center">
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    value={bet}
-                    onChange={(e) => setBetSafe(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
-                    disabled={!canBet}
-                    inputMode="decimal"
-                    className="w-24 bg-transparent text-center text-lg font-bold tabular-nums outline-none disabled:opacity-70"
-                  />
-                  <button onClick={() => adjustBet(10)} disabled={!canBet} className="w-7 h-7 rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-40 flex items-center justify-center">
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <button onClick={() => adjustBet(-10)} disabled={!canBet} className="w-7 h-7 rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-40 flex items-center justify-center"><Minus className="w-4 h-4" /></button>
+                  <input value={bet} onChange={(e) => setBetSafe(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0)} disabled={!canBet} inputMode="decimal" className="w-24 bg-transparent text-center text-lg font-bold tabular-nums outline-none disabled:opacity-70" />
+                  <button onClick={() => adjustBet(10)} disabled={!canBet} className="w-7 h-7 rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-40 flex items-center justify-center"><Plus className="w-4 h-4" /></button>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button onClick={() => setBetSafe(balance)} disabled={!canBet} className="h-9 rounded-lg bg-[#2563eb] hover:bg-[#1d4fd7] disabled:opacity-40 text-sm font-bold">
-                    ALL IN
-                  </button>
-                  <button onClick={() => setBetSafe(bet * 2)} disabled={!canBet} className="h-9 rounded-lg bg-[#2563eb] hover:bg-[#1d4fd7] disabled:opacity-40 text-sm font-bold">
-                    x2
-                  </button>
+                  <button onClick={() => setBetSafe(balance)} disabled={!canBet} className="h-9 rounded-lg bg-[#2563eb] hover:bg-[#1d4fd7] disabled:opacity-40 text-sm font-bold">ALL IN</button>
+                  <button onClick={() => setBetSafe(bet * 2)} disabled={!canBet} className="h-9 rounded-lg bg-[#2563eb] hover:bg-[#1d4fd7] disabled:opacity-40 text-sm font-bold">x2</button>
                 </div>
               </div>
 
-              {/* Build / Cash out */}
               <div className="flex-1 flex flex-col gap-2">
                 <button
                   onClick={build}
-                  className="flex-1 rounded-xl font-black text-lg tracking-wide text-[#3a2a00] shadow-lg active:translate-y-0.5 transition-transform"
-                  style={{
-                    background: 'repeating-linear-gradient(45deg,#febb3c 0 14px,#e6a82f 14px 28px)',
-                    border: '3px solid #3a2a00',
-                  }}
+                  disabled={busy || signedIn === false}
+                  className="flex-1 rounded-xl font-black text-lg tracking-wide text-[#3a2a00] shadow-lg active:translate-y-0.5 transition-transform disabled:opacity-60"
+                  style={{ background: 'repeating-linear-gradient(45deg,#febb3c 0 14px,#e6a82f 14px 28px)', border: '3px solid #3a2a00' }}
                 >
-                  {canBet ? 'BUILD' : 'BUILD +1'}
+                  {busy && !building ? 'BUILDING…' : building ? 'BUILD +1' : 'BUILD'}
                 </button>
                 {building && (
-                  <button
-                    onClick={cashOut}
-                    className="h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] font-black text-base shadow-lg active:translate-y-0.5 transition-transform"
-                  >
-                    CASH OUT x{fmt(coeff)}
+                  <button onClick={cashOut} disabled={busy} className="h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] disabled:opacity-60 font-black text-base shadow-lg active:translate-y-0.5 transition-transform">
+                    CASH OUT x{coeffStr(coeff)}
                   </button>
                 )}
               </div>
@@ -372,30 +391,18 @@ export default function TowerRushPage() {
         <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-3">
           <div className="rounded-2xl bg-[#11192a] border border-white/10 p-4 flex items-start justify-between">
             <div>
-              <div className="text-[11px] text-white/40">ID : 0</div>
-              <div className="text-2xl font-black tabular-nums">
-                {fmt(balance)} <span className="text-sm font-bold text-white/60">FUN</span>
-              </div>
+              <div className="text-[11px] text-white/40">{userId ? `ID : ${userId.slice(0, 8)}` : 'ID : —'}</div>
+              <div className="text-2xl font-black tabular-nums">{fmt(balance)} <span className="text-sm font-bold text-white/60">{currency}</span></div>
               <div className="text-xs text-white/40 mt-1">{clockStr}</div>
             </div>
-            <button className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-              <Menu className="w-4 h-4" />
-            </button>
+            <button className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Menu className="w-4 h-4" /></button>
           </div>
 
           <div className="rounded-2xl bg-[#11192a] border border-white/10 overflow-hidden flex-1 min-h-[360px] flex flex-col">
             <div className="p-1.5">
               <div className="grid grid-cols-3 bg-black/30 rounded-full p-1 text-xs font-bold">
                 {(['players', 'history', 'top'] as Tab[]).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={`py-1.5 rounded-full capitalize transition-colors ${
-                      tab === t ? 'bg-[#febb3c] text-[#3a2a00]' : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {t}
-                  </button>
+                  <button key={t} onClick={() => setTab(t)} className={`py-1.5 rounded-full capitalize transition-colors ${tab === t ? 'bg-[#febb3c] text-[#3a2a00]' : 'text-white/60 hover:text-white'}`}>{t}</button>
                 ))}
               </div>
             </div>
@@ -409,20 +416,15 @@ export default function TowerRushPage() {
                 <Line key={`${p.id}-${i}`} a={p.id} b={fmt(p.bet)} c={p.win > 0 ? fmt(p.win) : '—'} d={p.time} good={p.win > 0} />
               ))}
 
-              {tab === 'history' && (
-                history.length === 0
-                  ? <Empty text="No rounds yet — press BUILD." />
-                  : history.map((h) => (
-                      <Line key={h.id} a={`x${fmt(h.coeff)}`} b={fmt(h.bet)} c={h.won ? fmt(h.win) : '0.00'} d={h.won ? 'WIN' : 'LOSS'} good={h.won} />
-                    ))
-              )}
+              {tab === 'history' && (history.length === 0
+                ? <Empty text="No rounds yet — press BUILD." />
+                : history.map((h) => (
+                    <Line key={h.id} a={`x${coeffStr(h.coeff)}`} b={fmt(h.stake)} c={h.won ? fmt(h.payout) : '0.00'} d={h.won ? 'WIN' : 'LOSS'} good={h.won} />
+                  )))}
 
-              {tab === 'top' && players
-                .slice()
-                .sort((x, y) => y.win - x.win)
-                .map((p, i) => (
-                  <Line key={`top-${p.id}-${i}`} a={p.id} b={fmt(p.bet)} c={fmt(p.win)} d={`#${i + 1}`} good />
-                ))}
+              {tab === 'top' && players.slice().sort((x, y) => y.win - x.win).map((p, i) => (
+                <Line key={`top-${p.id}-${i}`} a={p.id} b={fmt(p.bet)} c={fmt(p.win)} d={`#${i + 1}`} good />
+              ))}
             </div>
           </div>
         </aside>
@@ -438,8 +440,8 @@ function BrickBlock() {
     <div
       className="relative flex items-center justify-center"
       style={{
-        width: BLOCK_W,
-        height: BLOCK_H,
+        width: TOWER_BLOCK_W,
+        height: TOWER_BLOCK_H,
         borderRadius: 6,
         background: 'repeating-linear-gradient(0deg,#b0432e 0 12px,#9c3a27 12px 13px), #a83f2b',
         boxShadow: 'inset 0 0 0 3px #7d2e1e, 0 3px 4px rgba(0,0,0,0.35)',
@@ -483,7 +485,6 @@ function Skyline() {
           </div>
         </div>
       ))}
-      {/* Ground / dirt strip */}
       <div className="absolute bottom-0 left-0 right-0 h-3 bg-[#6b4f33]" />
     </div>
   )
