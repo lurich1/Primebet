@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft, Info, Menu, Minus, Plus, ShieldCheck, X } from 'lucide-react'
 import { getUserId } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
@@ -58,6 +59,8 @@ export default function TowerRushPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [fairness, setFairness] = useState<Fairness>({ hash: null, seed: null, crashFloor: null })
+  // Win celebration splash (mirrors the football bet-won trophy display).
+  const [win, setWin] = useState<{ amount: number; coeff: number; code: string } | null>(null)
 
   const [showInfo, setShowInfo] = useState(false)
   const [tab, setTab] = useState<Tab>('players')
@@ -209,6 +212,7 @@ export default function TowerRushPage() {
       setMessage(`Cashed out x${coeffStr(d.coeff)} · +${fmt(d.payout)} ${currency}`)
       setFairness((f) => ({ ...f, seed: d.serverSeed, crashFloor: d.crashFloor }))
       pushHistory({ coeff: d.coeff, stake: bet, payout: d.payout, won: true })
+      setWin({ amount: d.payout, coeff: d.coeff, code: (roundId ?? '').slice(0, 8).toUpperCase() })
       scheduleReset()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -249,6 +253,55 @@ export default function TowerRushPage() {
         .tr-sway { animation: tr-sway 1.4s ease-in-out infinite; transform-origin: top center }
         .tr-fall { animation: tr-fall .9s ease-in forwards }
       `}</style>
+
+      {/* ─── Win celebration splash (SportyBet-style, same as football) ─── */}
+      {win && (
+        <div className="fixed inset-0 z-[60] flex flex-col items-center px-5 sm:px-6 bg-black/90 animate-in fade-in duration-300">
+          <button
+            type="button"
+            onClick={() => setWin(null)}
+            aria-label="Close"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition-colors"
+          >
+            <X className="w-6 h-6" strokeWidth={2.5} />
+          </button>
+
+          <div className="mt-16 sm:mt-20 text-center">
+            <p className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight drop-shadow-lg">YOU WON</p>
+            <p className="mt-2 text-3xl sm:text-4xl font-bold text-white tabular-nums drop-shadow-md">
+              {currency} {fmt(win.amount)}
+            </p>
+            <p className="mt-1 text-xl font-extrabold text-[#8effa1] tabular-nums">x{coeffStr(win.coeff)}</p>
+          </div>
+
+          <div className="relative flex-1 w-full mt-1 sm:mt-2 min-h-0 max-w-md">
+            <Image
+              src="/won_trophy_image.png"
+              alt="Trophy"
+              fill
+              priority
+              className="object-contain drop-shadow-[0_0_50px_rgba(255,200,0,0.55)]"
+            />
+          </div>
+
+          {win.code && (
+            <p className="mt-1 text-sm sm:text-base text-white text-center">
+              <span className="font-medium text-white/80">Round: </span>
+              <span className="font-mono font-bold tracking-wider tabular-nums">{win.code}</span>
+            </p>
+          )}
+
+          <div className="mt-3 mb-6 w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setWin(null)}
+              className="w-full h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] text-white font-black text-base"
+            >
+              Collect
+            </button>
+          </div>
+        </div>
+      )}
 
       <header className="h-12 px-4 flex items-center justify-between border-b border-white/10 bg-[#0b1220]">
         <Link href="/" className="flex items-center gap-2 text-white/70 hover:text-white text-sm">
