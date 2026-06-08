@@ -1,28 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, ArrowDownToLine, History, Receipt, X, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, ArrowDownToLine, History, Receipt, X, Check, Loader2, LogOut } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { transactions } from "@/lib/data";
-import { TxnRow } from "@/components/txn-row";
-import { cedis, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMoneyWithCurrency } from "@/lib/format-money";
+import { getUserId, clearUserSession } from "@/lib/user-session";
 
-const KPIS = [
-  { icon: "🎯", tone: "gold", val: "42.5%", label: "Win Rate", trend: "↑ 2.1%", up: true },
-  { icon: "📈", tone: "emerald", val: "+GH₵8.4K", label: "Total Won", trend: "↑ GH₵220", up: true },
-  { icon: "🎲", tone: "cyan", val: "247", label: "Total Bets", trend: "—", up: true },
-  { icon: "🔥", tone: "rose", val: "12", label: "Win Streak", trend: "best 18", up: true },
-];
+interface AccountUser {
+  id: string;
+  name: string;
+  currency: string;
+  balance: number;
+  totalDeposited: number;
+  totalWithdrawn: number;
+  verificationStep: number;
+  withdrawalApproved: boolean;
+  phone: string | null;
+}
 
+// MoMo providers offered to Ghana accounts. Telecel/Vodafone both settle
+// through Paystack's 'vod' rail.
 const METHODS = [
-  { id: "mtn", name: "MTN MoMo", color: "#fbbf24", icon: "📱" },
-  { id: "telecel", name: "Telecel Cash", color: "#ef4444", icon: "📲" },
-  { id: "voda", name: "Vodafone Cash", color: "#dc2626", icon: "💳" },
-];
+  { id: "mtn", provider: "mtn", name: "MTN MoMo", icon: "📱" },
+  { id: "telecel", provider: "vod", name: "Telecel Cash", icon: "📲" },
+  { id: "voda", provider: "vod", name: "Vodafone Cash", icon: "💳" },
+] as const;
 
 export default function AccountPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<AccountUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [noSession, setNoSession] = useState(false);
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
+
+  const refresh = useCallback(async () => {
+    const id = getUserId();
+    if (!id) {
+      setNoSession(true);
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${id}`);
+      if (res.status === 404) {
+        clearUserSession();
+        setNoSession(true);
+        return;
+      }
+      const data = await res.json();
+      setUser(data);
+    } catch {
+      /* keep last known state */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  function signOut() {
+    clearUserSession();
+    router.push("/login");
+  }
+
+  const initials = user?.name
+    ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    : "—";
+  const cur = user?.currency ?? "GHS";
+  const money = (n: number) => formatMoneyWithCurrency(n, cur);
+
+  if (loading) {
+    return (
+      <AppShell tabs={false}>
+        <div className="grid place-items-center py-32 text-[var(--color-ink-dim)]">
+          <Loader2 size={26} className="animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (noSession) {
+    return (
+      <AppShell tabs={false}>
+        <div className="card p-10 text-center max-w-md mx-auto mt-10">
+          <h2 className="font-display font-extrabold text-[19px]">You&apos;re not signed in</h2>
+          <p className="text-[13px] text-[var(--color-ink-dim)] mt-2">Sign in to view your wallet, deposit, and withdraw.</p>
+          <div className="flex gap-3 justify-center mt-6">
+            <Link href="/login" className="rounded-xl px-5 py-3 font-display font-bold grad-violet-pink text-white text-sm">Sign In</Link>
+            <Link href="/register" className="rounded-xl px-5 py-3 font-display font-bold border border-[var(--color-line)] text-sm">Create account</Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell tabs={false}>
@@ -32,20 +107,25 @@ export default function AccountPage() {
           <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-[var(--color-violet)]/15 blur-3xl" />
           <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
             <div className="flex items-center gap-4">
-              <div className="grid place-items-center w-16 h-16 rounded-2xl grad-violet-pink text-white font-display font-extrabold text-[22px]">KA</div>
+              <div className="grid place-items-center w-16 h-16 rounded-2xl grad-violet-pink text-white font-display font-extrabold text-[22px]">{initials}</div>
               <div>
                 <div className="text-[11px] text-[var(--color-ink-dim)]">Welcome back</div>
-                <div className="font-display font-extrabold text-[19px]">Kwame Asante</div>
+                <div className="font-display font-extrabold text-[19px]">{user?.name}</div>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="chip px-2 py-0.5 bg-[var(--color-emerald)]/12 border-[var(--color-emerald)]/30 text-[var(--color-emerald)]">✓ Verified</span>
-                  <span className="chip px-2 py-0.5 bg-[var(--color-amber)]/12 border-[var(--color-amber)]/30 text-[var(--color-amber)]">⭐ VIP Gold</span>
+                  {user && user.verificationStep >= 4 ? (
+                    <span className="chip px-2 py-0.5 bg-[var(--color-emerald)]/12 border-[var(--color-emerald)]/30 text-[var(--color-emerald)]">✓ Verified</span>
+                  ) : (
+                    <span className="chip px-2 py-0.5 bg-[var(--color-amber)]/12 border-[var(--color-amber)]/30 text-[var(--color-amber)]">Verification {user?.verificationStep ?? 0}/4</span>
+                  )}
+                  <button onClick={signOut} className="chip px-2 py-0.5 inline-flex items-center gap-1 text-[var(--color-ink-dim)] hover:text-white">
+                    <LogOut size={11} /> Sign out
+                  </button>
                 </div>
               </div>
             </div>
             <div className="sm:ml-auto sm:text-right">
               <div className="text-[11px] text-[var(--color-ink-dim)]">Available Balance</div>
-              <div className="num text-[30px] font-extrabold grad-text leading-tight">{cedis(3240)}</div>
-              <div className="num text-[11px] text-[var(--color-amber)]">+{cedis(120)} Bonus</div>
+              <div className="num text-[30px] font-extrabold grad-text leading-tight">{money(user?.balance ?? 0)}</div>
             </div>
           </div>
 
@@ -58,23 +138,12 @@ export default function AccountPage() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs from real wallet totals */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-        {KPIS.map((k) => (
-          <div key={k.label} className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className={cn("grid place-items-center w-9 h-9 rounded-xl text-[16px]",
-                k.tone === "gold" && "bg-[var(--color-amber)]/12",
-                k.tone === "emerald" && "bg-[var(--color-emerald)]/12",
-                k.tone === "cyan" && "bg-[var(--color-cyan)]/12",
-                k.tone === "rose" && "bg-[var(--color-rose)]/12",
-              )}>{k.icon}</span>
-              <span className={cn("num text-[10.5px] font-bold", k.up ? "text-[var(--color-emerald)]" : "text-[var(--color-rose)]")}>{k.trend}</span>
-            </div>
-            <div className="num text-[20px] font-extrabold">{k.val}</div>
-            <div className="text-[11px] text-[var(--color-ink-dim)] mt-0.5">{k.label}</div>
-          </div>
-        ))}
+        <Kpi icon="💰" tone="emerald" val={money(user?.totalDeposited ?? 0)} label="Total Deposited" />
+        <Kpi icon="🏧" tone="cyan" val={money(user?.totalWithdrawn ?? 0)} label="Total Withdrawn" />
+        <Kpi icon="🎯" tone="gold" val={`${user?.verificationStep ?? 0}/4`} label="Verification" />
+        <Kpi icon="🔓" tone="rose" val={user?.withdrawalApproved ? "Enabled" : "Pending"} label="Withdrawals" />
       </div>
 
       {/* recent activity */}
@@ -86,15 +155,36 @@ export default function AccountPage() {
           </div>
           <Link href="/transactions" className="text-[11.5px] font-semibold text-[var(--color-cyan)] hover:underline">View all →</Link>
         </div>
-        <div className="divide-y divide-[var(--color-line)]">
-          {transactions.slice(0, 6).map((t) => (
-            <TxnRow key={t.id} t={t} />
-          ))}
-        </div>
+        <p className="text-[13px] text-[var(--color-ink-dim)] py-6 text-center">
+          Your deposits, withdrawals, and bet activity appear on the{" "}
+          <Link href="/transactions" className="text-[var(--color-cyan)] hover:underline">transactions</Link> page.
+        </p>
       </div>
 
-      {modal && <PaymentModal type={modal} onClose={() => setModal(null)} />}
+      {modal && user && (
+        <PaymentModal
+          type={modal}
+          user={user}
+          onClose={() => setModal(null)}
+          onSuccess={() => { void refresh(); }}
+        />
+      )}
     </AppShell>
+  );
+}
+
+function Kpi({ icon, tone, val, label }: { icon: string; tone: string; val: string; label: string }) {
+  return (
+    <div className="card p-4">
+      <span className={cn("grid place-items-center w-9 h-9 rounded-xl text-[16px] mb-3",
+        tone === "gold" && "bg-[var(--color-amber)]/12",
+        tone === "emerald" && "bg-[var(--color-emerald)]/12",
+        tone === "cyan" && "bg-[var(--color-cyan)]/12",
+        tone === "rose" && "bg-[var(--color-rose)]/12",
+      )}>{icon}</span>
+      <div className="num text-[18px] font-extrabold truncate">{val}</div>
+      <div className="text-[11px] text-[var(--color-ink-dim)] mt-0.5">{label}</div>
+    </div>
   );
 }
 
@@ -124,19 +214,98 @@ function ActionLink({ href, icon, label }: { href: string; icon: React.ReactNode
   );
 }
 
-function PaymentModal({ type, onClose }: { type: "deposit" | "withdraw"; onClose: () => void }) {
-  const [method, setMethod] = useState("mtn");
+function PaymentModal({
+  type,
+  user,
+  onClose,
+  onSuccess,
+}: {
+  type: "deposit" | "withdraw";
+  user: AccountUser;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [method, setMethod] = useState<(typeof METHODS)[number]["id"]>("mtn");
   const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string>("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const quick = type === "deposit" ? [50, 100, 200, 500] : [100, 200, 500, 1000];
+  const provider = METHODS.find((m) => m.id === method)!.provider;
+  const amt = parseFloat(amount);
+  const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
+
+  async function pollMomo(reference: string) {
+    // Poll the verify endpoint until terminal. ~60s budget at 3s intervals.
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const res = await fetch(`/api/payments/paystack/momo/status?reference=${encodeURIComponent(reference)}`);
+        const data = await res.json();
+        const s = data.status as string;
+        if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
+        if (["failed", "abandoned", "amount-mismatch", "verify-failed"].includes(s)) {
+          setError("Payment was not completed. Please try again.");
+          return;
+        }
+        setStatus("Waiting for you to approve the prompt on your phone…");
+      } catch {
+        /* transient — keep polling */
+      }
+    }
+    setError("Timed out waiting for approval. If you approved it, your balance will update shortly.");
+  }
+
+  async function deposit() {
+    setError(null);
+    setBusy(true);
+    setStatus("Sending mobile-money prompt…");
+    try {
+      const res = await fetch("/api/payments/paystack/momo/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim(), provider }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Could not start the deposit."); return; }
+      setStatus(data.displayText ?? "Approve the prompt on your phone…");
+      await pollMomo(data.reference);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdraw() {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/users/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, amount: amt, network: "momo", phone: phone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Withdrawal failed."); return; }
+      setDone(true);
+      onSuccess();
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={busy ? undefined : onClose} />
       <div className="relative w-full sm:max-w-[420px] card rounded-b-none sm:rounded-2xl animate-rise">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-line)]">
           <h3 className="font-display font-extrabold text-[16px] capitalize">{type}</h3>
-          <button onClick={onClose} className="text-[var(--color-ink-faint)] hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} disabled={busy} className="text-[var(--color-ink-faint)] hover:text-white disabled:opacity-40"><X size={20} /></button>
         </div>
 
         {done ? (
@@ -144,22 +313,23 @@ function PaymentModal({ type, onClose }: { type: "deposit" | "withdraw"; onClose
             <div className="grid place-items-center w-16 h-16 rounded-full grad-emerald mb-4 shadow-[0_10px_36px_-8px_rgba(52,211,153,.6)]">
               <Check size={30} className="text-white" />
             </div>
-            <h4 className="font-display font-extrabold text-[17px] capitalize">{type} Initiated</h4>
+            <h4 className="font-display font-extrabold text-[17px] capitalize">{type === "deposit" ? "Deposit complete" : "Withdrawal requested"}</h4>
             <p className="text-[13px] text-[var(--color-ink-dim)] mt-1.5">
-              {type === "deposit" ? "Approve the prompt on your phone to complete." : "Funds arrive in 5–10 minutes."}
+              {type === "deposit" ? "Your balance has been updated." : "Funds arrive after the operator processes your request."}
             </p>
             <button onClick={onClose} className="mt-6 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm">Done</button>
           </div>
         ) : (
           <div className="p-5 space-y-4">
             <div>
-              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Payment Method</label>
+              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money network</label>
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {METHODS.map((mm) => (
                   <button
                     key={mm.id}
                     onClick={() => setMethod(mm.id)}
-                    className={cn("flex flex-col items-center gap-1 rounded-xl border py-3 text-[10.5px] font-semibold transition",
+                    disabled={busy}
+                    className={cn("flex flex-col items-center gap-1 rounded-xl border py-3 text-[10.5px] font-semibold transition disabled:opacity-50",
                       method === mm.id ? "border-[var(--color-violet)]/60 bg-[var(--color-surface-2)] text-white glow-violet" : "border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-line-2)]",
                     )}
                   >
@@ -171,32 +341,57 @@ function PaymentModal({ type, onClose }: { type: "deposit" | "withdraw"; onClose
             </div>
 
             <div>
+              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={busy}
+                placeholder="0244 XXX XXX"
+                className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
+              />
+            </div>
+
+            <div>
               <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Amount</label>
               <div className="relative mt-2">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 num text-[13px] text-[var(--color-ink-faint)]">GH₵</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 num text-[13px] text-[var(--color-ink-faint)]">{user.currency}</span>
                 <input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  disabled={busy}
                   placeholder="0.00"
-                  className="w-full num text-[18px] font-bold bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl pl-14 pr-3 py-3 outline-none focus:border-[var(--color-violet)]/60"
+                  className="w-full num text-[18px] font-bold bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl pl-16 pr-3 py-3 outline-none focus:border-[var(--color-violet)]/60"
                 />
               </div>
               <div className="grid grid-cols-4 gap-2 mt-2">
                 {quick.map((q) => (
-                  <button key={q} onClick={() => setAmount(String(q))} className="num text-[12px] font-bold rounded-lg py-2 border border-[var(--color-line)] bg-[var(--color-surface-2)] text-[var(--color-ink-dim)] hover:text-white transition">
+                  <button key={q} onClick={() => setAmount(String(q))} disabled={busy} className="num text-[12px] font-bold rounded-lg py-2 border border-[var(--color-line)] bg-[var(--color-surface-2)] text-[var(--color-ink-dim)] hover:text-white transition disabled:opacity-50">
                     {q}
                   </button>
                 ))}
               </div>
             </div>
 
+            {type === "withdraw" && (
+              <p className="text-[11.5px] text-[var(--color-ink-dim)]">Available: <span className="num font-bold text-white">{money(user.balance)}</span></p>
+            )}
+
+            {status && !error && (
+              <p className="text-[12.5px] text-[var(--color-cyan)] flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" /> {status}
+              </p>
+            )}
+            {error && <p className="text-[12.5px] font-semibold text-[var(--color-rose,#fb7185)]">{error}</p>}
+
             <button
-              onClick={() => parseFloat(amount) > 0 && setDone(true)}
-              disabled={!(parseFloat(amount) > 0)}
-              className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize"
+              onClick={type === "deposit" ? deposit : withdraw}
+              disabled={busy || !(amt > 0) || !phone.trim()}
+              className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
-              {type} {amount ? cedis(parseFloat(amount)) : ""}
+              {busy && <Loader2 size={16} className="animate-spin" />}
+              {type} {amt > 0 ? money(amt) : ""}
             </button>
           </div>
         )}
