@@ -21,8 +21,11 @@ export function MobileNav() {
 
   return (
     <>
-      <nav className="xl:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-[var(--color-line)] pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-5 h-[60px]">
+      {/* Floating bottom nav — detached pill that hovers over content and
+          stays fixed while scrolling. The wrapper ignores pointer events so
+          taps pass through its transparent margins; the pill re-enables them. */}
+      <nav className="xl:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none">
+        <div className="pointer-events-auto mx-auto max-w-md grid grid-cols-5 h-[62px] glass rounded-2xl border border-[var(--color-line)] shadow-[0_10px_34px_-10px_rgba(0,0,0,.7)]">
           {ITEMS.map((it) => {
             const Icon = it.icon;
             const active = it.href !== "__search" && (it.href === "/" ? pathname === "/" : pathname.startsWith(it.href));
