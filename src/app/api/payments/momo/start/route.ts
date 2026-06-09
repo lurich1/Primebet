@@ -3,6 +3,7 @@ import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import {
   isMomoConfigured,
+  momoCurrency,
   newReferenceId,
   requestToPay,
   toMsisdn,
@@ -99,7 +100,9 @@ export async function POST(request: Request) {
     await requestToPay({
       referenceId: reference,
       amount,
-      currency: user.currency,
+      // Sandbox only accepts EUR; production uses the wallet currency. The
+      // pending ledger row above keeps the real currency for accounting.
+      currency: momoCurrency(user.currency),
       msisdn,
       externalId,
       payerMessage: 'Plusebet deposit',

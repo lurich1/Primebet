@@ -48,6 +48,19 @@ export function isMomoConfigured(): boolean {
   )
 }
 
+/**
+ * The currency to send to MoMo. The sandbox environment ONLY accepts EUR
+ * (it rejects GHS with INVALID_CURRENCY), so in sandbox we send EUR while the
+ * ledger keeps the real wallet currency. Production uses the wallet currency.
+ */
+export function momoCurrency(walletCurrency: string): string {
+  return TARGET_ENV === 'sandbox' ? 'EUR' : walletCurrency
+}
+
+export function isSandbox(): boolean {
+  return TARGET_ENV === 'sandbox'
+}
+
 // ── Access token (cached in-memory until ~1 min before expiry) ───────────────
 let cachedToken: { value: string; expiresAt: number } | null = null
 
