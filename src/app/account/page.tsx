@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowDownToLine, History, Receipt, X, Check, Loader2, LogOut } from "lucide-react";
+import { Plus, ArrowDownToLine, History, Receipt, X, Check, Loader2, LogOut, KeyRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { formatMoneyWithCurrency } from "@/lib/format-money";
@@ -36,6 +36,7 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [noSession, setNoSession] = useState(false);
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
+  const [pwOpen, setPwOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const id = getUserId();
@@ -162,6 +163,27 @@ export default function AccountPage() {
         </p>
       </div>
 
+      {/* security */}
+      <div className="card p-4 mt-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="grid place-items-center w-9 h-9 rounded-xl bg-[var(--color-violet)]/12 shrink-0">
+              <KeyRound size={16} className="text-[var(--color-violet)]" />
+            </span>
+            <div className="min-w-0">
+              <div className="font-display font-bold text-[13.5px]">Password</div>
+              <div className="text-[11.5px] text-[var(--color-ink-dim)] truncate">Change the password you use to sign in.</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setPwOpen(true)}
+            className="shrink-0 rounded-xl px-4 py-2 text-[12.5px] font-bold border border-[var(--color-line)] bg-[var(--color-surface-2)] text-[var(--color-ink-dim)] hover:text-white hover:border-[var(--color-line-2)] transition"
+          >
+            Change
+          </button>
+        </div>
+      </div>
+
       {modal && user && (
         <PaymentModal
           type={modal}
@@ -169,6 +191,10 @@ export default function AccountPage() {
           onClose={() => setModal(null)}
           onSuccess={() => { void refresh(); }}
         />
+      )}
+
+      {pwOpen && user && (
+        <ChangePasswordModal userId={user.id} onClose={() => setPwOpen(false)} />
       )}
     </AppShell>
   );
@@ -408,6 +434,99 @@ function PaymentModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ChangePasswordModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const tooShort = next.length > 0 && next.length < 6;
+  const canSubmit = current.length > 0 && next.length >= 6 && next === confirm && !busy;
+
+  async function submit() {
+    if (!canSubmit) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/users/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, currentPassword: current, newPassword: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Could not change password.");
+        return;
+      }
+      setDone(true);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={busy ? undefined : onClose} />
+      <div className="relative w-full sm:max-w-[420px] card rounded-b-none sm:rounded-2xl animate-rise">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-line)]">
+          <h3 className="font-display font-extrabold text-[16px]">Change password</h3>
+          <button onClick={onClose} disabled={busy} className="text-[var(--color-ink-faint)] hover:text-white disabled:opacity-40"><X size={20} /></button>
+        </div>
+
+        {done ? (
+          <div className="flex flex-col items-center text-center px-6 py-12">
+            <div className="grid place-items-center w-16 h-16 rounded-full grad-emerald mb-4 shadow-[0_10px_36px_-8px_rgba(52,211,153,.6)]">
+              <Check size={30} className="text-white" />
+            </div>
+            <h4 className="font-display font-extrabold text-[17px]">Password updated</h4>
+            <p className="text-[13px] text-[var(--color-ink-dim)] mt-1.5">Use your new password next time you sign in.</p>
+            <button onClick={onClose} className="mt-6 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm">Done</button>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4">
+            <Field label="Current password" value={current} onChange={setCurrent} placeholder="Your current password" />
+            <Field label="New password" value={next} onChange={setNext} placeholder="At least 6 characters" />
+            {tooShort && <p className="text-[11.5px] text-[var(--color-rose,#fb7185)] -mt-2">New password must be at least 6 characters.</p>}
+            <Field label="Confirm new password" value={confirm} onChange={setConfirm} placeholder="Re-enter new password" />
+            {mismatch && <p className="text-[11.5px] text-[var(--color-rose,#fb7185)] -mt-2">Passwords don&apos;t match.</p>}
+
+            {error && <p className="text-[12.5px] font-semibold text-[var(--color-rose,#fb7185)]">{error}</p>}
+
+            <button
+              onClick={submit}
+              disabled={!canSubmit}
+              className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition flex items-center justify-center gap-2"
+            >
+              {busy && <Loader2 size={16} className="animate-spin" />}
+              Update password
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div>
+      <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">{label}</label>
+      <input
+        type="password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full mt-2 text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60 transition"
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MatchCard, SectionHead } from "@/components/match-card";
 import { PromoStrip, StatRibbon, FeaturedMatch } from "@/components/home-sections";
+import { WinnersTicker } from "@/components/winners-ticker";
 import { competitions } from "@/lib/data";
 import { useMatches } from "@/lib/use-matches";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ export default function Home() {
     <AppShell>
       <PromoStrip />
       <StatRibbon />
+      <WinnersTicker />
       {featured && <FeaturedMatch m={featured} />}
 
       {/* league filter chips */}
