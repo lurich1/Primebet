@@ -32,6 +32,8 @@ export type Match = {
   markets: Market[]; // 1 X 2
   marketCount: number;
   featured?: boolean;
+  locked?: boolean; // betting closed (match started / live / admin-locked)
+  lockLabel?: string; // short reason shown on the card, e.g. "Started"
 };
 
 export type Selection = {

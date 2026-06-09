@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, BarChart3 } from "lucide-react";
+import { ChevronRight, BarChart3, Lock } from "lucide-react";
 import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
 import { TeamBadge } from "./brand";
@@ -17,11 +17,14 @@ function OddsCell({ m, idx }: { m: Match; idx: number }) {
   const id = `${m.id}-1x2-${mk.label}`;
   const has = useSlip((s) => s.selections.some((x) => x.id === id));
   const toggle = useSlip((s) => s.toggle);
+  const locked = m.locked;
   return (
     <button
       data-active={has}
+      disabled={locked}
       onClick={(e) => {
         e.preventDefault();
+        if (locked) return;
         toggle({
           id,
           matchId: m.id,
@@ -31,7 +34,7 @@ function OddsCell({ m, idx }: { m: Match; idx: number }) {
           odds: mk.odds,
         });
       }}
-      className="odds-btn group/odds flex flex-col items-center justify-center gap-0.5 py-2 px-1"
+      className="odds-btn group/odds flex flex-col items-center justify-center gap-0.5 py-2 px-1 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       <span className="text-[10px] font-medium text-[var(--color-ink-faint)] group-data-[active=true]/odds:text-white/80">
         {mk.label}
@@ -55,6 +58,11 @@ export function MatchCard({ m }: { m: Match }) {
             <span className="flex items-center gap-1.5 rounded-full px-2 py-0.5 bg-[var(--color-rose)]/12 border border-[var(--color-rose)]/30 text-[var(--color-rose)]">
               <span className="live-dot" />
               <span className="num text-[10px] font-bold">{m.minute}&apos;</span>
+            </span>
+          ) : m.locked ? (
+            <span className="flex items-center gap-1 rounded-full px-2 py-0.5 bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-ink-faint)]">
+              <Lock size={9} />
+              <span className="text-[9.5px] font-bold uppercase tracking-wide">{m.lockLabel ?? "Locked"}</span>
             </span>
           ) : (
             <span className="num text-[10.5px] text-[var(--color-ink-faint)]">{m.kickoff}</span>

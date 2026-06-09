@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Star, Share2 } from "lucide-react";
+import { ChevronLeft, Star, Share2, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import type { Match as ApiMatch } from "@/lib/domain-types";
 import type { Match as UiMatch } from "@/lib/types";
@@ -142,6 +142,13 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
         ))}
       </div>
 
+      {m.locked && (
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-4 py-3 text-[12.5px] text-[var(--color-ink-dim)]">
+          <Lock size={14} className="text-[var(--color-ink-faint)]" />
+          Betting is closed for this match{m.lockLabel ? ` — ${m.lockLabel.toLowerCase()}` : ""}.
+        </div>
+      )}
+
       {/* market groups */}
       <div className="space-y-3 mt-3">
         {groups.map((g, gi) => (
@@ -158,10 +165,12 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
                   <button
                     key={pi}
                     data-active={active}
-                    onClick={() =>
-                      toggle({ id: sid, matchId: m.id, match: `${m.home} v ${m.away}`, market: g.title, pick: p.label, odds: p.odds })
-                    }
-                    className="odds-btn group/o flex items-center justify-between gap-2 px-3 py-2.5"
+                    disabled={m.locked}
+                    onClick={() => {
+                      if (m.locked) return;
+                      toggle({ id: sid, matchId: m.id, match: `${m.home} v ${m.away}`, market: g.title, pick: p.label, odds: p.odds });
+                    }}
+                    className="odds-btn group/o flex items-center justify-between gap-2 px-3 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span className="text-[11.5px] font-medium text-[var(--color-ink-dim)] group-data-[active=true]/o:text-white/80 truncate">{p.label}</span>
                     <span className="num text-[13px] font-bold shrink-0">{p.odds.toFixed(2)}</span>

@@ -7,6 +7,15 @@
 import type { Match as ApiMatch, MarketBook } from '@/lib/domain-types'
 import type { Match as UiMatch, Market } from '@/lib/types'
 import { getCountryFlag } from '@/lib/country-flags'
+import { getBettingState } from '@/lib/match-betting'
+
+// Short, user-facing label for why betting is closed on a match.
+const LOCK_LABEL: Record<string, string> = {
+  'starting-soon': 'Starts soon',
+  started: 'Started',
+  finished: 'Ended',
+  'admin-locked': 'Locked',
+}
 
 // Deterministic team-badge palette. Same name always lands on the same colour
 // so a team looks consistent across renders (the mock data hand-picked these;
@@ -74,6 +83,8 @@ const ONE_X_TWO = (o: ApiMatch['odds']): Market[] => [
  */
 export function apiMatchToUi(api: ApiMatch): UiMatch {
   const kickoff = api.isLive ? 'Live' : api.startTime ?? 'TBD'
+  // Betting closes once a match starts / goes live (or an admin locks it).
+  const bet = getBettingState(api)
   return {
     id: api.id,
     league: api.league,
@@ -96,6 +107,8 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     markets: ONE_X_TWO(api.odds),
     marketCount: countMarkets(api.markets),
     featured: false,
+    locked: bet.closed,
+    lockLabel: bet.reason ? LOCK_LABEL[bet.reason] : undefined,
   }
 }
 

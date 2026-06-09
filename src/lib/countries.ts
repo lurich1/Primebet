@@ -57,7 +57,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycLabel: 'Ghana Card number',
     kycPlaceholder: 'GHA-XXXXXXXXX-X',
     kycError: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)',
-    minFirstDeposit: 200,
+    minFirstDeposit: 150,
     verificationAmount: 200,
     gateway: 'moolre',
     payoutTarget: 'mobile',

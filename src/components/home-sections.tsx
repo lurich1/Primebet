@@ -94,6 +94,11 @@ export function FeaturedMatch({ m }: { m: Match }) {
                 <span className="live-dot" /> LIVE {m.minute}&apos;
               </span>
             )}
+            {!m.live && m.locked && (
+              <span className="chip px-2.5 py-1 bg-[var(--color-surface-2)] border-[var(--color-line)] text-[var(--color-ink-faint)] uppercase text-[10px] font-bold tracking-wide">
+                {m.lockLabel ?? "Locked"}
+              </span>
+            )}
             <span className="text-[11.5px] text-[var(--color-ink-dim)] ml-auto">{m.leagueFlag} {m.league}</span>
           </div>
 
@@ -133,10 +138,12 @@ export function FeaturedMatch({ m }: { m: Match }) {
                 <button
                   key={p.label}
                   data-active={active}
-                  onClick={() =>
-                    toggle({ id, matchId: m.id, match: `${m.home} v ${m.away}`, market: "Match Result", pick: p.name, odds: p.odds })
-                  }
-                  className="odds-btn group/o flex items-center justify-between px-4 py-3"
+                  disabled={m.locked}
+                  onClick={() => {
+                    if (m.locked) return;
+                    toggle({ id, matchId: m.id, match: `${m.home} v ${m.away}`, market: "Match Result", pick: p.name, odds: p.odds });
+                  }}
+                  className="odds-btn group/o flex items-center justify-between px-4 py-3 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-[12px] font-medium text-[var(--color-ink-dim)] group-data-[active=true]/o:text-white/80 truncate">{p.name}</span>
                   <span className="num text-[15px] font-bold">{p.odds.toFixed(2)}</span>

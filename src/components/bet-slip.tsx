@@ -1,19 +1,117 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn } from "lucide-react";
 import { useSlip, totalOdds } from "@/lib/store";
+import { getUserId } from "@/lib/user-session";
 import { cn, cedis } from "@/lib/utils";
 
 const QUICK = [20, 50, 100, 500];
 
 function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
   const { selections, stake, remove, clear, setStake } = useSlip();
+  const router = useRouter();
   const [placed, setPlaced] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const odds = totalOdds(selections);
   const potential = stake * odds;
   const bonusPct = selections.length >= 5 ? 0.15 : selections.length >= 3 ? 0.08 : 0;
   const bonus = potential * bonusPct;
+
+  function goLogin() {
+    onPlaced?.();
+    router.push("/login");
+  }
+
+  async function placeBet() {
+    if (stake <= 0 || busy) return;
+    setError(null);
+
+    // Require an account before a bet can be staked.
+    const userId = getUserId();
+    if (!userId) {
+      setNeedsLogin(true);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      // Map the UI slip selections into the BetSelection shape the API persists.
+      const payload = selections.map((s) => {
+        const [home, away] = s.match.split(" v ");
+        return {
+          id: s.id,
+          matchId: s.matchId,
+          match: {
+            id: s.matchId,
+            league: "",
+            country: "",
+            homeTeam: (home ?? s.match).trim(),
+            awayTeam: (away ?? "").trim(),
+            isLive: false,
+            odds: { home: 0, draw: 0, away: 0 },
+          },
+          marketKey: s.market,
+          marketLabel: s.market,
+          outcomeKey: s.pick,
+          outcomeLabel: s.pick,
+          odds: s.odds,
+        };
+      });
+
+      const res = await fetch("/api/bets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selections: payload, stake, userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setNeedsLogin(true);
+        return;
+      }
+      if (!res.ok) {
+        setError(data.error ?? "Could not place this bet. Please try again.");
+        return;
+      }
+      setCode(data.bet?.code ?? null);
+      setPlaced(true);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (needsLogin) {
+    return (
+      <div className="flex flex-col items-center text-center px-5 py-10 animate-rise">
+        <div className="grid place-items-center w-16 h-16 rounded-full bg-[var(--color-surface-2)] border border-[var(--color-line)] mb-4">
+          <LogIn className="text-[var(--color-violet)]" size={28} />
+        </div>
+        <h3 className="font-display font-extrabold text-lg">Sign in to place your bet</h3>
+        <p className="text-[13px] text-[var(--color-ink-dim)] mt-1.5">
+          Your selections are saved. Log in to your account and your slip will still be here.
+        </p>
+        <button
+          onClick={goLogin}
+          className="mt-5 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm"
+        >
+          Log in / Sign up
+        </button>
+        <button
+          onClick={() => setNeedsLogin(false)}
+          className="mt-2 w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px]"
+        >
+          Back to slip
+        </button>
+      </div>
+    );
+  }
 
   if (placed) {
     return (
@@ -23,10 +121,10 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
         </div>
         <h3 className="font-display font-extrabold text-lg">Bet Placed!</h3>
         <p className="text-[13px] text-[var(--color-ink-dim)] mt-1">
-          Ticket <span className="num text-[var(--color-cyan)]">NW-{Math.floor(100000 + odds * 13337).toString(36).toUpperCase()}</span> confirmed.
+          Ticket <span className="num text-[var(--color-cyan)]">{code ?? "confirmed"}</span> confirmed.
         </p>
         <button
-          onClick={() => { setPlaced(false); clear(); onPlaced?.(); }}
+          onClick={() => { setPlaced(false); setCode(null); clear(); onPlaced?.(); }}
           className="mt-5 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm"
         >
           Place Another
@@ -120,12 +218,17 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
           </div>
         </div>
 
+        {error && (
+          <p className="text-[12px] font-semibold text-[var(--color-rose,#fb7185)] text-center">{error}</p>
+        )}
+
         <button
-          onClick={() => stake > 0 && setPlaced(true)}
-          disabled={stake <= 0}
-          className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white shadow-[0_10px_30px_-8px_rgba(236,72,153,.5)] disabled:opacity-50 disabled:shadow-none active:scale-[.99] transition"
+          onClick={placeBet}
+          disabled={stake <= 0 || busy}
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white shadow-[0_10px_30px_-8px_rgba(236,72,153,.5)] disabled:opacity-50 disabled:shadow-none active:scale-[.99] transition"
         >
-          Place Bet · {cedis(stake)}
+          {busy && <Loader2 size={16} className="animate-spin" />}
+          {busy ? "Placing…" : `Place Bet · ${cedis(stake)}`}
         </button>
       </div>
     </div>

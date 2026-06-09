@@ -8,6 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { formatMoneyWithCurrency } from "@/lib/format-money";
 import { getUserId, clearUserSession } from "@/lib/user-session";
+import { getCountryForCurrency, getMinFirstDeposit, isCurrencyCode } from "@/lib/countries";
 
 interface AccountUser {
   id: string;
@@ -232,10 +233,16 @@ function PaymentModal({
   const [status, setStatus] = useState<string>("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const quick = type === "deposit" ? [50, 100, 200, 500] : [100, 200, 500, 1000];
+  const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
+  const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
+  const quick =
+    type === "deposit"
+      ? [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
+      : [100, 200, 500, 1000];
   const provider = METHODS.find((m) => m.id === method)!.provider;
   const amt = parseFloat(amount);
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
+  const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
 
   async function pollMomo(reference: string) {
     // Poll the verify endpoint until terminal. ~60s budget at 3s intervals.
@@ -372,6 +379,11 @@ function PaymentModal({
                   </button>
                 ))}
               </div>
+              {type === "deposit" && (
+                <p className={cn("text-[11.5px] mt-2", belowMin ? "font-semibold text-[var(--color-rose,#fb7185)]" : "text-[var(--color-ink-faint)]")}>
+                  Minimum deposit: <span className="num font-bold">{money(minDeposit)}</span>
+                </p>
+              )}
             </div>
 
             {type === "withdraw" && (
@@ -387,7 +399,7 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || !phone.trim()}
+              disabled={busy || !(amt > 0) || !phone.trim() || belowMin}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
