@@ -114,11 +114,6 @@ export default function AccountPage() {
                 <div className="text-[11px] text-[var(--color-ink-dim)]">Welcome back</div>
                 <div className="font-display font-extrabold text-[19px]">{user?.name}</div>
                 <div className="flex items-center gap-2 mt-1.5">
-                  {user && user.verificationStep >= 4 ? (
-                    <span className="chip px-2 py-0.5 bg-[var(--color-emerald)]/12 border-[var(--color-emerald)]/30 text-[var(--color-emerald)]">✓ Verified</span>
-                  ) : (
-                    <span className="chip px-2 py-0.5 bg-[var(--color-amber)]/12 border-[var(--color-amber)]/30 text-[var(--color-amber)]">Verification {user?.verificationStep ?? 0}/4</span>
-                  )}
                   <button onClick={signOut} className="chip px-2 py-0.5 inline-flex items-center gap-1 text-[var(--color-ink-dim)] hover:text-white">
                     <LogOut size={11} /> Sign out
                   </button>
@@ -141,10 +136,9 @@ export default function AccountPage() {
       </div>
 
       {/* KPIs from real wallet totals */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
         <Kpi icon="💰" tone="emerald" val={money(user?.totalDeposited ?? 0)} label="Total Deposited" />
         <Kpi icon="🏧" tone="cyan" val={money(user?.totalWithdrawn ?? 0)} label="Total Withdrawn" />
-        <Kpi icon="🎯" tone="gold" val={`${user?.verificationStep ?? 0}/4`} label="Verification" />
         <Kpi icon="🔓" tone="rose" val={user?.withdrawalApproved ? "Enabled" : "Pending"} label="Withdrawals" />
       </div>
 
