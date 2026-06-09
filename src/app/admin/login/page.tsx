@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -60,14 +59,10 @@ function LoginForm() {
             <ArrowLeft className="w-5 h-5" />
             <span>Back to site</span>
           </Link>
-          <Link href="/" className="flex items-center" aria-label="Prime Bet home">
-            <Image
-              src="/primebet.png"
-              alt="Prime Bet"
-              width={282}
-              height={123}
-              className="logo-img h-7 w-auto"
-            />
+          <Link href="/" className="flex items-center" aria-label="Plusebet home">
+            <span className="font-display font-extrabold tracking-tight text-lg leading-none">
+              Pluse<span className="text-primary">bet</span>
+            </span>
           </Link>
         </div>
       </header>

@@ -33,7 +33,7 @@ export function AuthShell({
             <Stat val="<10m" label="Payouts" />
           </div>
         </div>
-        <p className="relative text-[11px] text-[var(--color-ink-faint)]">© 2026 NexxtWin. 18+ · Play responsibly.</p>
+        <p className="relative text-[11px] text-[var(--color-ink-faint)]">© 2026 Plusebet. 18+ · Play responsibly.</p>
       </div>
 
       {/* right form panel */}

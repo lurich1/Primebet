@@ -40,7 +40,7 @@ export function Brand({
     <span className={cn("flex items-center gap-2 select-none", className)}>
       <LogoMark size={size} id={id} />
       <span className="font-display font-extrabold tracking-tight text-[19px] leading-none">
-        NEXXT<span className="grad-text">WIN</span>
+        PLUSE<span className="grad-text">BET</span>
       </span>
       {pro && (
         <span className="font-mono text-[9px] font-bold tracking-[0.18em] text-amber px-1.5 py-0.5 rounded bg-amber/10 border border-amber/30 text-[var(--color-amber)]">

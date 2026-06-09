@@ -43,7 +43,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to continue to NexxtWin.">
+    <AuthShell title="Welcome back" subtitle="Sign in to continue to Plusebet.">
       <form onSubmit={onSubmit}>
         <Field label="Phone or Email">
           <input

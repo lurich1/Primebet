@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -57,13 +56,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Menu className="w-5 h-5" />
             </button>
             <Link href="/admin" className="flex items-center" aria-label="Admin home">
-              <Image
-                src="/primebet.png"
-                alt="Prime Bet"
-                width={282}
-                height={123}
-                className="logo-img h-7 w-auto"
-              />
+              <span className="font-display font-extrabold tracking-tight text-lg leading-none">
+                Pluse<span className="text-primary">bet</span>
+              </span>
             </Link>
             <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
               Admin
@@ -83,13 +78,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden lg:flex w-60 bg-card border-r border-border flex-col">
         <div className="px-5 py-5 border-b border-border flex items-center gap-3">
           <Link href="/admin" className="flex items-center" aria-label="Admin home">
-            <Image
-              src="/primebet.png"
-              alt="Prime Bet"
-              width={282}
-              height={123}
-              className="logo-img h-7 w-auto"
-            />
+            <span className="font-display font-extrabold tracking-tight text-lg leading-none">
+              Pluse<span className="text-primary">bet</span>
+            </span>
           </Link>
           <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
             Admin
@@ -123,13 +114,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r border-border flex flex-col shadow-popover animate-in slide-in-from-left duration-200">
             <div className="px-5 py-5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
-                <Image
-                  src="/primebet.png"
-                  alt="Prime Bet"
-                  width={282}
-                  height={123}
-                  className="logo-img h-7 w-auto"
-                />
+                <span className="font-display font-extrabold tracking-tight text-lg leading-none">
+                  Pluse<span className="text-primary">bet</span>
+                </span>
                 <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">
                   Admin
                 </span>

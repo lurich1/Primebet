@@ -21,9 +21,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NexxtWin — Premium Sports Betting",
+  title: "Plusebet — Premium Sports Betting",
   description:
-    "NexxtWin — premium international sports betting. Live odds, mobile-money payouts, verified tickets.",
+    "Plusebet — premium international sports betting. Live odds, mobile-money payouts, verified tickets.",
 };
 
 export const viewport: Viewport = {
