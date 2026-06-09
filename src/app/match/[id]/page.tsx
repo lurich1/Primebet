@@ -99,7 +99,7 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex flex-col items-center gap-2.5 flex-1">
-              <TeamBadge short={m.homeShort} color={m.homeColor} size={60} />
+              <TeamBadge short={m.homeShort} color={m.homeColor} size={60} logo={m.homeLogo} />
               <span className="font-display font-bold text-[15px] text-center">{m.home}</span>
             </div>
             <div className="flex flex-col items-center">
@@ -120,16 +120,15 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
               )}
             </div>
             <div className="flex flex-col items-center gap-2.5 flex-1">
-              <TeamBadge short={m.awayShort} color={m.awayColor} size={60} />
+              <TeamBadge short={m.awayShort} color={m.awayColor} size={60} logo={m.awayLogo} />
               <span className="font-display font-bold text-[15px] text-center">{m.away}</span>
             </div>
           </div>
 
           <div className="flex items-center justify-center gap-5 mt-5 pt-4 border-t border-[var(--color-line)] text-center">
             <Stat label="Markets" value={`${m.marketCount}`} />
-            <Stat label="Possession" value="58%" />
-            <Stat label="Shots" value="12-7" />
-            <Stat label="Corners" value="6-3" />
+            <Stat label="Country" value={m.country} />
+            <Stat label="League" value={m.league} />
           </div>
         </div>
       </div>

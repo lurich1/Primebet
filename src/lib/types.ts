@@ -22,6 +22,8 @@ export type Match = {
   awayShort: string;
   homeColor: string;
   awayColor: string;
+  homeLogo?: string; // real crest URL from the feed; falls back to initials badge
+  awayLogo?: string;
   kickoff: string; // ISO-ish display string
   live: boolean;
   minute?: number;

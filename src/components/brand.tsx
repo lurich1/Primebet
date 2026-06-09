@@ -57,11 +57,32 @@ export function TeamBadge({
   short,
   color,
   size = 38,
+  logo,
 }: {
   short: string;
   color: string;
   size?: number;
+  logo?: string;
 }) {
+  // Real crest from the feed when we have one; otherwise an initials badge.
+  if (logo) {
+    return (
+      <span
+        className="grid place-items-center rounded-full shrink-0 overflow-hidden bg-white/5"
+        style={{ width: size, height: size, border: `1.5px solid ${color}66` }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logo}
+          alt={short}
+          width={Math.round(size * 0.74)}
+          height={Math.round(size * 0.74)}
+          loading="lazy"
+          className="object-contain"
+        />
+      </span>
+    );
+  }
   return (
     <span
       className="grid place-items-center rounded-full font-display font-extrabold shrink-0"

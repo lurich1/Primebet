@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { promos, stats } from "@/lib/data";
+import { promos } from "@/lib/data";
 import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
+import { useMatches } from "@/lib/use-matches";
 import { TeamBadge } from "./brand";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,13 @@ export function PromoStrip() {
 }
 
 export function StatRibbon() {
+  const { live, today, all } = useMatches();
+  // Real, feed-derived counts only — no fabricated figures.
+  const tiles = [
+    { val: `${live.length}`, label: "Live Now" },
+    { val: `${today.length}`, label: "Starting Today" },
+    { val: `${all.length}`, label: "Total Fixtures" },
+  ];
   return (
     <div className="flex gap-2.5 overflow-x-auto no-scrollbar mt-4">
       <Link
@@ -52,15 +60,10 @@ export function StatRibbon() {
         <span className="text-[15px]">🎟️</span>
         <span className="font-display font-bold text-[12.5px] text-[var(--color-cyan)]">Verify Tickets</span>
       </Link>
-      {stats.map((s, i) => (
+      {tiles.map((s, i) => (
         <div key={i} className="shrink-0 flex items-center gap-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3.5 py-2.5">
           <span className="num text-[15px] font-extrabold">{s.val}</span>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[10px] text-[var(--color-ink-dim)] whitespace-nowrap">{s.label}</span>
-            <span className={cn("num text-[10px] font-bold", s.up ? "text-[var(--color-emerald)]" : "text-[var(--color-rose)]")}>
-              {s.chg}
-            </span>
-          </div>
+          <span className="text-[10px] text-[var(--color-ink-dim)] whitespace-nowrap">{s.label}</span>
         </div>
       ))}
     </div>
@@ -86,27 +89,38 @@ export function FeaturedMatch({ m }: { m: Match }) {
         <div className="relative">
           <div className="flex items-center gap-2 mb-5">
             <span className="chip px-2.5 py-1 grad-gold text-black font-bold border-transparent">⭐ FEATURED</span>
-            <span className="flex items-center gap-1.5 chip px-2.5 py-1 bg-[var(--color-rose)]/12 border-[var(--color-rose)]/30 text-[var(--color-rose)]">
-              <span className="live-dot" /> LIVE {m.minute}&apos;
-            </span>
+            {m.live && (
+              <span className="flex items-center gap-1.5 chip px-2.5 py-1 bg-[var(--color-rose)]/12 border-[var(--color-rose)]/30 text-[var(--color-rose)]">
+                <span className="live-dot" /> LIVE {m.minute}&apos;
+              </span>
+            )}
             <span className="text-[11.5px] text-[var(--color-ink-dim)] ml-auto">{m.leagueFlag} {m.league}</span>
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <Link href={`/match/${m.id}`} className="flex flex-col items-center gap-2 flex-1 group">
-              <TeamBadge short={m.homeShort} color={m.homeColor} size={56} />
+              <TeamBadge short={m.homeShort} color={m.homeColor} size={56} logo={m.homeLogo} />
               <span className="font-display font-bold text-[15px] text-center group-hover:text-[var(--color-violet)] transition">{m.home}</span>
             </Link>
 
             <div className="flex flex-col items-center px-2">
-              <div className="num text-[34px] font-extrabold leading-none tracking-tight">
-                {m.scoreHome}<span className="text-[var(--color-ink-faint)] mx-1.5">:</span>{m.scoreAway}
-              </div>
-              <span className="num text-[10px] text-[var(--color-rose)] font-bold mt-1.5">{m.minute}&apos; · 2ND HALF</span>
+              {m.live ? (
+                <>
+                  <div className="num text-[34px] font-extrabold leading-none tracking-tight">
+                    {m.scoreHome ?? 0}<span className="text-[var(--color-ink-faint)] mx-1.5">:</span>{m.scoreAway ?? 0}
+                  </div>
+                  <span className="num text-[10px] text-[var(--color-rose)] font-bold mt-1.5">{m.minute}&apos;</span>
+                </>
+              ) : (
+                <>
+                  <div className="font-display text-[22px] font-bold text-[var(--color-ink-dim)]">VS</div>
+                  <span className="num text-[10px] text-[var(--color-cyan)] font-semibold mt-1.5">{m.kickoff}</span>
+                </>
+              )}
             </div>
 
             <Link href={`/match/${m.id}`} className="flex flex-col items-center gap-2 flex-1 group">
-              <TeamBadge short={m.awayShort} color={m.awayColor} size={56} />
+              <TeamBadge short={m.awayShort} color={m.awayColor} size={56} logo={m.awayLogo} />
               <span className="font-display font-bold text-[15px] text-center group-hover:text-[var(--color-violet)] transition">{m.away}</span>
             </Link>
           </div>

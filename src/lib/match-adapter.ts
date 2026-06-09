@@ -86,6 +86,8 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     awayShort: shortCode(api.awayTeam),
     homeColor: colorFor(api.homeTeam),
     awayColor: colorFor(api.awayTeam),
+    homeLogo: api.homeFlagUrl,
+    awayLogo: api.awayFlagUrl,
     kickoff,
     live: api.isLive,
     minute: parseMinute(api.minute),

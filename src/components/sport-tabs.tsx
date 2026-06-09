@@ -22,9 +22,6 @@ export function SportTabs() {
           >
             <span>{s.icon}</span>
             {s.name}
-            <span className={cn("num text-[10px]", active === s.id ? "text-[var(--color-cyan)]" : "text-[var(--color-ink-faint)]")}>
-              {s.count}
-            </span>
           </button>
         ))}
       </div>

@@ -65,11 +65,11 @@ export function MatchCard({ m }: { m: Match }) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col gap-2.5 min-w-0 flex-1">
             <div className="flex items-center gap-2.5">
-              <TeamBadge short={m.homeShort} color={m.homeColor} size={32} />
+              <TeamBadge short={m.homeShort} color={m.homeColor} size={32} logo={m.homeLogo} />
               <span className="font-display font-semibold text-[14px] truncate">{m.home}</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <TeamBadge short={m.awayShort} color={m.awayColor} size={32} />
+              <TeamBadge short={m.awayShort} color={m.awayColor} size={32} logo={m.awayLogo} />
               <span className="font-display font-semibold text-[14px] truncate">{m.away}</span>
             </div>
           </div>
