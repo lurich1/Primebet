@@ -264,16 +264,20 @@ function PaymentModal({
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
   const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
 
-  async function pollMomo(reference: string) {
+  async function pollMomo(reference: string, statusPath: string) {
     // Poll the verify endpoint until terminal. ~60s budget at 3s intervals.
+    const TERMINAL_FAIL = [
+      "failed", "abandoned", "amount-mismatch", "verify-failed",
+      "status-failed", "no-user", "credit-failed", "unknown-reference",
+    ];
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       try {
-        const res = await fetch(`/api/payments/paystack/momo/status?reference=${encodeURIComponent(reference)}`);
+        const res = await fetch(`${statusPath}?reference=${encodeURIComponent(reference)}`);
         const data = await res.json();
         const s = data.status as string;
         if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
-        if (["failed", "abandoned", "amount-mismatch", "verify-failed"].includes(s)) {
+        if (TERMINAL_FAIL.includes(s)) {
           setError("Payment was not completed. Please try again.");
           return;
         }
@@ -289,8 +293,13 @@ function PaymentModal({
     setError(null);
     setBusy(true);
     setStatus("Sending mobile-money prompt…");
+    // MTN settles directly through the MTN MoMo Collections API; Telecel /
+    // Vodafone go through Paystack's mobile-money rail.
+    const useMomo = method === "mtn";
+    const startPath = useMomo ? "/api/payments/momo/start" : "/api/payments/paystack/momo/start";
+    const statusPath = useMomo ? "/api/payments/momo/status" : "/api/payments/paystack/momo/status";
     try {
-      const res = await fetch("/api/payments/paystack/momo/start", {
+      const res = await fetch(startPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim(), provider }),
@@ -298,7 +307,7 @@ function PaymentModal({
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not start the deposit."); return; }
       setStatus(data.displayText ?? "Approve the prompt on your phone…");
-      await pollMomo(data.reference);
+      await pollMomo(data.reference, statusPath);
     } catch {
       setError("Network error — please try again.");
     } finally {
