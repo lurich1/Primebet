@@ -297,9 +297,11 @@ function PaymentModal({
     setError(null);
     setBusy(true);
     setStatus("Sending mobile-money prompt…");
-    // MTN settles directly through the MTN MoMo Collections API; Telecel /
-    // Vodafone go through Paystack's mobile-money rail.
-    const useMomo = method === "mtn";
+    // MTN can settle directly through the MTN MoMo Collections API, but only
+    // once production MoMo credentials are live (set NEXT_PUBLIC_MOMO_LIVE=true).
+    // Until then MTN — like Telecel/Vodafone — goes through Paystack's live
+    // mobile-money rail so real deposits keep working.
+    const useMomo = method === "mtn" && process.env.NEXT_PUBLIC_MOMO_LIVE === "true";
     const startPath = useMomo ? "/api/payments/momo/start" : "/api/payments/paystack/momo/start";
     const statusPath = useMomo ? "/api/payments/momo/status" : "/api/payments/paystack/momo/status";
     try {
