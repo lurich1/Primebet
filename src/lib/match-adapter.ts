@@ -89,6 +89,7 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     id: api.id,
     league: api.league,
     leagueFlag: getCountryFlag(api.country),
+    leagueFlagUrl: api.countryFlagUrl,
     country: api.country,
     sport: api.sport ?? 'football',
     home: api.homeTeam,

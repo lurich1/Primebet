@@ -53,6 +53,34 @@ export function Brand({
   return <Link href={href}>{inner}</Link>;
 }
 
+/**
+ * League/country flag. Renders the real flag image from the feed when we have
+ * one, otherwise falls back to the emoji flag (or globe for unknown countries).
+ */
+export function CountryFlag({
+  url,
+  emoji,
+  className = "",
+}: {
+  url?: string;
+  emoji: string;
+  className?: string;
+}) {
+  if (url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        className={cn("inline-block h-[12px] w-[16px] rounded-[2px] object-cover align-[-1px]", className)}
+      />
+    );
+  }
+  return <span className={className}>{emoji}</span>;
+}
+
 export function TeamBadge({
   short,
   color,

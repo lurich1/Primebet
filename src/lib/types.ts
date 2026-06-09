@@ -14,6 +14,7 @@ export type Match = {
   id: string;
   league: string;
   leagueFlag: string;
+  leagueFlagUrl?: string; // real flag image from the feed; emoji is the fallback
   country: string;
   sport: string;
   home: string;

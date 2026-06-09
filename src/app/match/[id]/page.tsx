@@ -8,7 +8,7 @@ import type { Match as ApiMatch } from "@/lib/domain-types";
 import type { Match as UiMatch } from "@/lib/types";
 import { apiMatchToUi, buildMarketGroupsFromApi } from "@/lib/match-adapter";
 import { useSlip } from "@/lib/store";
-import { TeamBadge } from "@/components/brand";
+import { TeamBadge, CountryFlag } from "@/components/brand";
 import { cn } from "@/lib/utils";
 
 const TABS = ["All", "Main", "Goals", "Halves", "Players", "Specials"];
@@ -86,7 +86,7 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
       <div className="grad-border overflow-hidden">
         <div className="relative p-5 sm:p-6">
           <div className="flex items-center justify-between mb-5 text-[12px] text-[var(--color-ink-dim)]">
-            <span className="flex items-center gap-1.5">{m.leagueFlag} {m.league}</span>
+            <span className="flex items-center gap-1.5"><CountryFlag url={m.leagueFlagUrl} emoji={m.leagueFlag} /> {m.league}</span>
             <div className="flex items-center gap-2">
               <button className="grid place-items-center w-8 h-8 rounded-lg border border-[var(--color-line)] hover:text-[var(--color-amber)] hover:border-[var(--color-amber)]/40 transition">
                 <Star size={15} />

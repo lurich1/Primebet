@@ -105,6 +105,7 @@ interface Fixture {
     name: string
     country: string
     season: number
+    flag: string | null
   }
   teams: {
     home: { id: number; name: string; logo: string }
@@ -427,6 +428,7 @@ function toMatch(fixture: Fixture, oddsRows: OddsRow[]): Match {
   if (typeof fixture.goals.away === 'number') base.awayScore = fixture.goals.away
   if (fixture.teams.home.logo) base.homeFlagUrl = fixture.teams.home.logo
   if (fixture.teams.away.logo) base.awayFlagUrl = fixture.teams.away.logo
+  if (fixture.league.flag) base.countryFlagUrl = fixture.league.flag
 
   const derived = deriveMarketBook(base)
   if (derived) {

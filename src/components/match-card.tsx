@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChevronRight, BarChart3, Lock } from "lucide-react";
 import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
-import { TeamBadge } from "./brand";
+import { TeamBadge, CountryFlag } from "./brand";
 
 const PICK_LABEL: Record<string, (m: Match) => string> = {
   "1": (m) => m.home,
@@ -51,7 +51,7 @@ export function MatchCard({ m }: { m: Match }) {
         {/* header row */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 text-[var(--color-ink-dim)]">
-            <span className="text-sm">{m.leagueFlag}</span>
+            <CountryFlag url={m.leagueFlagUrl} emoji={m.leagueFlag} className="text-sm" />
             <span className="text-[11px] font-medium truncate max-w-[140px]">{m.league}</span>
           </div>
           {m.live ? (

@@ -6,7 +6,7 @@ import { promos } from "@/lib/data";
 import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
 import { useMatches } from "@/lib/use-matches";
-import { TeamBadge } from "./brand";
+import { TeamBadge, CountryFlag } from "./brand";
 import { cn } from "@/lib/utils";
 
 const TONE: Record<string, string> = {
@@ -99,7 +99,9 @@ export function FeaturedMatch({ m }: { m: Match }) {
                 {m.lockLabel ?? "Locked"}
               </span>
             )}
-            <span className="text-[11.5px] text-[var(--color-ink-dim)] ml-auto">{m.leagueFlag} {m.league}</span>
+            <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-ink-dim)] ml-auto">
+              <CountryFlag url={m.leagueFlagUrl} emoji={m.leagueFlag} /> {m.league}
+            </span>
           </div>
 
           <div className="flex items-center justify-between gap-4">
