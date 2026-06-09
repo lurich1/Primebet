@@ -1,94 +1,80 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ChevronLeft, Star, Share2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { getMatch } from "@/lib/data";
+import type { Match as ApiMatch } from "@/lib/domain-types";
+import type { Match as UiMatch } from "@/lib/types";
+import { apiMatchToUi, buildMarketGroupsFromApi } from "@/lib/match-adapter";
 import { useSlip } from "@/lib/store";
 import { TeamBadge } from "@/components/brand";
 import { cn } from "@/lib/utils";
-
-type MarketGroup = {
-  title: string;
-  picks: { label: string; odds: number }[];
-  cols?: number;
-};
-
-function buildMarkets(home: string, away: string): MarketGroup[] {
-  return [
-    {
-      title: "Match Result (1X2)",
-      cols: 3,
-      picks: [
-        { label: home, odds: 2.1 },
-        { label: "Draw", odds: 3.4 },
-        { label: away, odds: 3.2 },
-      ],
-    },
-    {
-      title: "Double Chance",
-      cols: 3,
-      picks: [
-        { label: `${home} or Draw`, odds: 1.32 },
-        { label: "Home or Away", odds: 1.28 },
-        { label: `${away} or Draw`, odds: 1.62 },
-      ],
-    },
-    {
-      title: "Total Goals (Over / Under)",
-      cols: 2,
-      picks: [
-        { label: "Over 1.5", odds: 1.28 },
-        { label: "Under 1.5", odds: 3.6 },
-        { label: "Over 2.5", odds: 1.85 },
-        { label: "Under 2.5", odds: 1.95 },
-        { label: "Over 3.5", odds: 3.1 },
-        { label: "Under 3.5", odds: 1.36 },
-      ],
-    },
-    {
-      title: "Both Teams To Score",
-      cols: 2,
-      picks: [
-        { label: "Yes", odds: 1.72 },
-        { label: "No", odds: 2.05 },
-      ],
-    },
-    {
-      title: "Draw No Bet",
-      cols: 2,
-      picks: [
-        { label: home, odds: 1.55 },
-        { label: away, odds: 2.35 },
-      ],
-    },
-    {
-      title: "Correct Score",
-      cols: 3,
-      picks: [
-        { label: "2 - 1", odds: 8.5 },
-        { label: "1 - 1", odds: 6.0 },
-        { label: "2 - 0", odds: 9.5 },
-        { label: "1 - 0", odds: 7.0 },
-        { label: "3 - 1", odds: 12.0 },
-        { label: "0 - 0", odds: 11.0 },
-      ],
-    },
-  ];
-}
 
 const TABS = ["All", "Main", "Goals", "Halves", "Players", "Specials"];
 
 export default function MatchDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const m = getMatch(id);
   const [tab, setTab] = useState("All");
   const { selections, toggle } = useSlip();
 
-  if (!m) return notFound();
-  const groups = buildMarkets(m.home, m.away);
+  const [api, setApi] = useState<ApiMatch | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/matches/${encodeURIComponent(id)}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setStatus("notfound");
+          return;
+        }
+        const data = (await res.json()) as { match?: ApiMatch };
+        if (cancelled) return;
+        if (!data.match) {
+          setStatus("notfound");
+          return;
+        }
+        setApi(data.match);
+        setStatus("ready");
+      } catch {
+        if (!cancelled) setStatus("notfound");
+      }
+    }
+    load();
+    // Keep live scores/minute fresh while the page is open.
+    const timer = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [id]);
+
+  if (status === "loading") {
+    return (
+      <AppShell tabs={false}>
+        <p className="text-[13px] text-[var(--color-ink-faint)] py-12 text-center">Loading match…</p>
+      </AppShell>
+    );
+  }
+
+  if (status === "notfound" || !api) {
+    return (
+      <AppShell tabs={false}>
+        <Link href="/" className="inline-flex items-center gap-1 text-[13px] text-[var(--color-ink-dim)] hover:text-white mb-3 transition">
+          <ChevronLeft size={16} /> Back to Sports
+        </Link>
+        <p className="text-[13px] text-[var(--color-ink-faint)] py-12 text-center">
+          This match is no longer available. It may have finished or been removed from the feed.
+        </p>
+      </AppShell>
+    );
+  }
+
+  const m: UiMatch = apiMatchToUi(api);
+  const groups = buildMarketGroupsFromApi(api);
 
   return (
     <AppShell tabs={false}>
