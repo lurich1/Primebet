@@ -277,6 +277,10 @@ function PaymentModal({
         const data = await res.json();
         const s = data.status as string;
         if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
+        if (s === "sandbox") {
+          setError("MoMo is in SANDBOX test mode — no real money moves and nothing is credited. Switch to production MTN credentials to take real deposits.");
+          return;
+        }
         if (TERMINAL_FAIL.includes(s)) {
           setError("Payment was not completed. Please try again.");
           return;

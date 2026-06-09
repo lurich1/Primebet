@@ -2,7 +2,7 @@
 // idempotent on the reference (the MoMo X-Reference-Id), safe to poll.
 
 import { findPaymentByReference, markPaymentResolved } from '@/lib/payments-store'
-import { getRequestToPayStatus } from '@/lib/momo'
+import { getRequestToPayStatus, isSandbox } from '@/lib/momo'
 import { applyDepositCredit } from '@/lib/deposit-credit'
 
 export type MomoCreditStatus =
@@ -10,6 +10,7 @@ export type MomoCreditStatus =
   | 'already-credited'
   | 'pending'
   | 'failed'
+  | 'sandbox'
   | 'missing-reference'
   | 'unknown-reference'
   | 'status-failed'
@@ -46,6 +47,20 @@ export async function verifyAndCreditMomo(reference: string): Promise<MomoCredit
   }
   if (result.status === 'FAILED') {
     return { status: 'failed', ok: false, reference, reason: result.reason }
+  }
+
+  // SAFETY GUARD: the sandbox simulator reports SUCCESSFUL without any real
+  // money moving. NEVER credit a real wallet balance from sandbox — otherwise
+  // a live site on sandbox creds would hand out free balance. Only production
+  // (mtnghana) credits.
+  if (isSandbox()) {
+    console.warn('[momo-credit] sandbox success ignored — no real funds, not crediting', reference)
+    return {
+      status: 'sandbox',
+      ok: false,
+      reference,
+      reason: 'Sandbox test mode — no real money moved; balance not credited.',
+    }
   }
 
   // SUCCESSFUL — sanity-check the amount the network actually debited.
