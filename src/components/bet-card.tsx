@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Check, X, Clock, Banknote, Copy } from "lucide-react";
+import { ChevronDown, Check, X, Clock, Banknote, Copy, Trophy } from "lucide-react";
 import type { Bet } from "@/lib/types";
+import { WinCongrats } from "./win-congrats";
 import { cn, cedis } from "@/lib/utils";
 
 const STATUS = {
@@ -20,12 +21,32 @@ const LEG = {
 
 export function BetCard({ b }: { b: Bet }) {
   const [open, setOpen] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
   const s = STATUS[b.status];
   const Icon = s.icon;
+  const isWon = b.status === "won";
 
   return (
     <div className="card overflow-hidden">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-3 p-4 text-left">
+      {isWon && (
+        <WinCongrats
+          open={celebrate}
+          onClose={() => setCelebrate(false)}
+          onDetails={() => { setCelebrate(false); setOpen(true); }}
+          amount={b.potential}
+          currency={b.currency}
+          verifyCode={b.verifyCode}
+          ticketId={b.id}
+        />
+      )}
+      <button
+        onClick={() => {
+          // Opening a won ticket pops the celebration first (reference behaviour).
+          if (isWon && !open) setCelebrate(true);
+          setOpen((v) => !v);
+        }}
+        className="w-full flex items-center gap-3 p-4 text-left"
+      >
         <span className={cn("grid place-items-center w-10 h-10 rounded-xl border shrink-0", s.cls)}>
           <Icon size={18} />
         </span>
@@ -68,6 +89,14 @@ export function BetCard({ b }: { b: Bet }) {
           </div>
           <div className="flex items-center gap-2 pt-1">
             <button className="flex items-center gap-1.5 chip px-3 py-1.5"><Copy size={12} /> Copy code</button>
+            {isWon && (
+              <button
+                onClick={() => setCelebrate(true)}
+                className="flex items-center gap-1.5 chip px-3 py-1.5 bg-[var(--color-emerald)]/12 border-[var(--color-emerald)]/30 text-[var(--color-emerald)]"
+              >
+                <Trophy size={12} /> Celebrate win
+              </button>
+            )}
             {b.status === "pending" && (
               <button className="flex items-center gap-1.5 chip px-3 py-1.5 bg-[var(--color-cyan)]/12 border-[var(--color-cyan)]/30 text-[var(--color-cyan)]">
                 <Banknote size={12} /> Cash out {cedis(b.stake * b.totalOdds * 0.82)}

@@ -25,6 +25,15 @@ function fmtDate(iso: string | undefined): string {
   })
 }
 
+/**
+ * 17-char alphanumeric verification code, deterministic per bet — mirrors the
+ * reference ticket: bet UUID hex + public code, padded, sliced to 17.
+ */
+function verifyCodeFor(id: string, code: string): string {
+  const idHex = id.replace(/-/g, '').toUpperCase()
+  return `${idHex}${code}0000000000`.slice(0, 17)
+}
+
 export function placedBetToUi(b: PlacedBet): Bet {
   const legs = (b.selections ?? []).map((s) => ({
     match: matchLabel(s),
@@ -44,5 +53,7 @@ export function placedBetToUi(b: PlacedBet): Bet {
     // 'cashout' but the API never emits it, so this maps 1:1.
     status: b.status,
     date: fmtDate(b.placedAt),
+    currency: b.currency,
+    verifyCode: verifyCodeFor(b.id, b.code ?? b.id),
   }
 }

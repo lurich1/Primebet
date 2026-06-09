@@ -63,4 +63,6 @@ export type Bet = {
   potential: number;
   status: "won" | "lost" | "pending" | "cashout";
   date: string;
+  currency?: string;
+  verifyCode?: string; // 17-char ticket verification code (won-splash + ticket)
 };
