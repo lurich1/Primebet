@@ -7,11 +7,11 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { GlobalSearch } from "./global-search";
 
-const ITEMS = [
+const ITEMS: { href: string; label: string; icon: typeof Home; badge?: string }[] = [
   { href: "/", label: "Sports", icon: Home },
-  { href: "/live", label: "Live", icon: Radio, badge: "12" },
+  { href: "/live", label: "Live", icon: Radio },
   { href: "__search", label: "Search", icon: Search },
-  { href: "/my-bets", label: "My Bets", icon: Ticket, badge: "1" },
+  { href: "/my-bets", label: "My Bets", icon: Ticket },
   { href: "/account", label: "Account", icon: User },
 ];
 

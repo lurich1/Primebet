@@ -6,12 +6,12 @@ import { X } from "lucide-react";
 import { sports, competitions } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-const BROWSE = [
+const BROWSE: { href: string; icon: string; label: string; active?: boolean; count?: number }[] = [
   { href: "/", icon: "🏠", label: "Sports", active: true },
-  { href: "/live", icon: "🔴", label: "Live Now", count: 12 },
-  { href: "/my-bets", icon: "🎫", label: "My Bets", count: 1 },
+  { href: "/live", icon: "🔴", label: "Live Now" },
+  { href: "/my-bets", icon: "🎫", label: "My Bets" },
   { href: "/account", icon: "⭐", label: "Favourites" },
-  { href: "/account", icon: "🎁", label: "Promotions", count: 3 },
+  { href: "/account", icon: "🎁", label: "Promotions" },
 ];
 
 function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
@@ -55,7 +55,6 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
             <span className="flex items-center gap-2.5 min-w-0">
               <span>{c.flag}</span> <span className="truncate">{c.name}</span>
             </span>
-            <span className="num text-[10px] text-[var(--color-ink-faint)]">{c.count}</span>
           </Link>
         ))}
       </Section>
@@ -71,7 +70,6 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
             <span className="flex items-center gap-2.5">
               <span>{s.icon}</span> {s.name}
             </span>
-            <span className="num text-[10px] text-[var(--color-ink-faint)]">{s.count}</span>
           </Link>
         ))}
       </Section>

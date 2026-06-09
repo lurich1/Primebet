@@ -10,10 +10,10 @@ import { formatMoneyWithCurrency } from "@/lib/format-money";
 import { getUserId, getUserName, clearUserSession } from "@/lib/user-session";
 import { GlobalSearch } from "./global-search";
 
-const NAV = [
+const NAV: { href: string; label: string; icon: string; badge?: string }[] = [
   { href: "/", label: "Sports", icon: "🏠" },
-  { href: "/live", label: "Live", icon: "🔴", badge: "12" },
-  { href: "/my-bets", label: "My Bets", icon: "🎫", badge: "1" },
+  { href: "/live", label: "Live", icon: "🔴" },
+  { href: "/my-bets", label: "My Bets", icon: "🎫" },
   { href: "/bet-history", label: "History", icon: "📜" },
   { href: "/verify", label: "Verify", icon: "🎟️" },
 ];
