@@ -8,7 +8,7 @@ import { AuthShell, Field } from "@/components/auth-shell";
 import { saveUserSession } from "@/lib/user-session";
 
 const COUNTRIES = [
-  { dial: "233", iso: "GH", flag: "🇬🇭", kyc: "Ghana Card number", kycHint: "GHA-XXXXXXXXX-X", needsKyc: true },
+  { dial: "233", iso: "GH", flag: "🇬🇭", kyc: "Ghana Card number", kycHint: "GHA-XXXXXXXXX-X", needsKyc: false },
   { dial: "234", iso: "NG", flag: "🇳🇬", kyc: "BVN or NIN (optional)", kycHint: "11 digits", needsKyc: false },
   { dial: "254", iso: "KE", flag: "🇰🇪", kyc: "National ID number", kycHint: "7–8 digits", needsKyc: true },
   { dial: "27", iso: "ZA", flag: "🇿🇦", kyc: "ID number", kycHint: "13 digits", needsKyc: true },
@@ -101,9 +101,11 @@ export default function RegisterPage() {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
         </Field>
 
-        <Field label={country.kyc}>
-          <input value={kyc} onChange={(e) => setKyc(e.target.value)} placeholder={country.kycHint} className={inputCls} />
-        </Field>
+        {country.needsKyc && (
+          <Field label={country.kyc}>
+            <input value={kyc} onChange={(e) => setKyc(e.target.value)} placeholder={country.kycHint} className={inputCls} />
+          </Field>
+        )}
 
         <Field label="Password">
           <div className="relative">
