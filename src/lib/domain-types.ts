@@ -3,6 +3,8 @@
 // nextwin frontend (which has its own Match/Sport shapes) is untouched.
 // The ported lib stores, API routes, and admin pages all import from here.
 
+import type { CountryCode, CurrencyCode } from '@/lib/countries'
+
 export interface Match {
   id: string
   league: string
@@ -94,10 +96,10 @@ export interface AppUser {
   email: string
   passwordHash: string
   phone?: string
-  /** ISO country code: 'GH' | 'NG' | 'KE' | 'ZA'. */
-  country: 'GH' | 'NG' | 'KE' | 'ZA'
-  /** Wallet currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'. Mirrors country. */
-  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
+  /** ISO country code (see CountryCode in @/lib/countries). */
+  country: CountryCode
+  /** Wallet currency (see CurrencyCode). Mirrors country. */
+  currency: CurrencyCode
   /** Ghana Card number (legacy column; only populated for GH users). */
   ghanaCard?: string
   /** Country-specific KYC value: Ghana Card, BVN/NIN, Kenyan/SA national ID. */
@@ -121,7 +123,7 @@ export interface Commission {
   depositAmount: number
   commission: number
   rate: number
-  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
+  currency: CurrencyCode
   createdAt: string
 }
 
@@ -135,7 +137,7 @@ export interface PlacedBet {
   stake: number
   totalOdds: number
   potentialWin: number
-  currency: 'GHS' | 'NGN' | 'KES' | 'ZAR'
+  currency: CurrencyCode
   status: 'pending' | 'won' | 'lost'
   selections: BetSelection[]
   settledAt?: string

@@ -4,8 +4,12 @@
 // Add a new country here and the registration form, formatMoney, deposit
 // gateway routing, withdrawal flow, and verification gate all pick it up.
 
-export type CountryCode = 'GH' | 'NG' | 'KE' | 'ZA'
-export type CurrencyCode = 'GHS' | 'NGN' | 'KES' | 'ZAR'
+export type CountryCode =
+  | 'GH' | 'NG' | 'KE' | 'ZA'
+  | 'UG' | 'TZ' | 'CM' | 'ZM' | 'US' | 'GB' | 'CI' | 'RW'
+export type CurrencyCode =
+  | 'GHS' | 'NGN' | 'KES' | 'ZAR'
+  | 'UGX' | 'TZS' | 'XAF' | 'ZMW' | 'USD' | 'GBP' | 'XOF' | 'RWF'
 export type Gateway = 'moolre' | 'paystack' | 'manual'
 
 export interface PayoutNetwork {
@@ -128,10 +132,96 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
       { key: 'bank', label: 'Bank account' },
     ],
   },
+
+  // ── Manual / admin-credit markets (no automated rail yet) ──────────────────
+  UG: {
+    code: 'UG', name: 'Uganda', flag: '🇺🇬', currency: 'UGX', currencySymbol: 'USh',
+    locale: 'en-UG', dialCode: '256', requiresKyc: false,
+    kycLabel: 'National ID (NIN)', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 30000, verificationAmount: 30000, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'airtel', label: 'Airtel Money' },
+    ],
+  },
+  TZ: {
+    code: 'TZ', name: 'Tanzania', flag: '🇹🇿', currency: 'TZS', currencySymbol: 'TSh',
+    locale: 'en-TZ', dialCode: '255', requiresKyc: false,
+    kycLabel: 'National ID', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 20000, verificationAmount: 20000, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mpesa', label: 'M-Pesa' },
+      { key: 'tigo', label: 'Tigo Pesa' },
+      { key: 'airtel', label: 'Airtel Money' },
+    ],
+  },
+  CM: {
+    code: 'CM', name: 'Cameroon', flag: '🇨🇲', currency: 'XAF', currencySymbol: 'FCFA',
+    locale: 'fr-CM', dialCode: '237', requiresKyc: false,
+    kycLabel: 'National ID', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 5000, verificationAmount: 5000, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'orange', label: 'Orange Money' },
+    ],
+  },
+  ZM: {
+    code: 'ZM', name: 'Zambia', flag: '🇿🇲', currency: 'ZMW', currencySymbol: 'K',
+    locale: 'en-ZM', dialCode: '260', requiresKyc: false,
+    kycLabel: 'National ID', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 200, verificationAmount: 200, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'airtel', label: 'Airtel Money' },
+    ],
+  },
+  CI: {
+    code: 'CI', name: "Côte d'Ivoire", flag: '🇨🇮', currency: 'XOF', currencySymbol: 'CFA',
+    locale: 'fr-CI', dialCode: '225', requiresKyc: false,
+    kycLabel: 'National ID', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 5000, verificationAmount: 5000, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'orange', label: 'Orange Money' },
+      { key: 'moov', label: 'Moov Money' },
+    ],
+  },
+  RW: {
+    code: 'RW', name: 'Rwanda', flag: '🇷🇼', currency: 'RWF', currencySymbol: 'FRw',
+    locale: 'en-RW', dialCode: '250', requiresKyc: false,
+    kycLabel: 'National ID', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 10000, verificationAmount: 10000, gateway: 'manual', payoutTarget: 'mobile',
+    payoutNetworks: [
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'airtel', label: 'Airtel Money' },
+    ],
+  },
+  US: {
+    code: 'US', name: 'United States', flag: '🇺🇸', currency: 'USD', currencySymbol: '$',
+    locale: 'en-US', dialCode: '1', requiresKyc: false,
+    kycLabel: 'SSN (last 4)', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 10, verificationAmount: 10, gateway: 'manual', payoutTarget: 'bank',
+    payoutNetworks: [
+      { key: 'bank', label: 'Bank account' },
+    ],
+  },
+  GB: {
+    code: 'GB', name: 'United Kingdom', flag: '🇬🇧', currency: 'GBP', currencySymbol: '£',
+    locale: 'en-GB', dialCode: '44', requiresKyc: false,
+    kycLabel: 'ID number', kycPlaceholder: 'Optional', kycError: 'Invalid ID',
+    minFirstDeposit: 8, verificationAmount: 8, gateway: 'manual', payoutTarget: 'bank',
+    payoutNetworks: [
+      { key: 'bank', label: 'Bank account' },
+    ],
+  },
 }
 
-export const SUPPORTED_COUNTRY_CODES: CountryCode[] = ['GH', 'NG', 'KE', 'ZA']
-export const SUPPORTED_CURRENCY_CODES: CurrencyCode[] = ['GHS', 'NGN', 'KES', 'ZAR']
+export const SUPPORTED_COUNTRY_CODES: CountryCode[] = [
+  'GH', 'NG', 'KE', 'ZA', 'UG', 'TZ', 'CM', 'ZM', 'CI', 'RW', 'US', 'GB',
+]
+export const SUPPORTED_CURRENCY_CODES: CurrencyCode[] = [
+  'GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP',
+]
 export const DEFAULT_COUNTRY: CountryCode = 'GH'
 export const DEFAULT_CURRENCY: CurrencyCode = 'GHS'
 
@@ -191,14 +281,21 @@ export function normalizePhone(country: CountryCode, raw: string): string | null
     NG: [10],
     KE: [9],
     ZA: [9],
+    UG: [9],
+    TZ: [9],
+    CM: [9],
+    ZM: [9],
+    CI: [10],
+    RW: [9],
+    US: [10],
+    GB: [10],
   }
   if (!lengthsByCountry[country].includes(local.length)) return null
 
-  // GH/NG/KE display with a leading 0; ZA omits it (storage convention here is
-  // "0" + local for the first three to match the existing GH format, plain
-  // local for ZA so we don't break the SA display convention).
-  if (country === 'ZA') return local
-  return '0' + local
+  // Countries that use a national trunk "0" store as "0" + local; the rest
+  // (ZA, Cameroon, Côte d'Ivoire, US) store the bare local digits.
+  const TRUNK_ZERO = new Set<CountryCode>(['GH', 'NG', 'KE', 'UG', 'TZ', 'ZM', 'RW', 'GB'])
+  return TRUNK_ZERO.has(country) ? '0' + local : local
 }
 
 /**
@@ -226,6 +323,10 @@ export function normalizeKyc(country: CountryCode, raw: string): string | null {
       const digits = value.replace(/\D/g, '')
       return /^\d{13}$/.test(digits) ? digits : null
     }
+    default:
+      // KYC is optional for the manual-rail markets — accept any non-empty
+      // value as-is (the signup form doesn't even collect it for them).
+      return value || null
   }
 }
 

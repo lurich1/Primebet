@@ -46,8 +46,8 @@ create table if not exists public.users (
     password_hash            text not null,
     phone                    text,
     -- Country / currency the wallet is denominated in. Fixed at signup.
-    country                  text not null default 'GH' check (country in ('GH', 'NG', 'KE', 'ZA')),
-    currency                 text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
+    country                  text not null default 'GH' check (country in ('GH', 'NG', 'KE', 'ZA', 'UG', 'TZ', 'CM', 'ZM', 'CI', 'RW', 'US', 'GB')),
+    currency                 text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP')),
     -- KYC value captured at signup (country-specific shape: Ghana Card, BVN/NIN, etc.).
     kyc_id                   text,
     -- Legacy column kept for Ghana users so old migration 0010 data isn't lost.
@@ -80,7 +80,7 @@ create table if not exists public.commissions (
     deposit_amount    numeric(18, 2) not null check (deposit_amount > 0),
     commission_amount numeric(18, 2) not null check (commission_amount > 0),
     rate              numeric(6, 4) not null check (rate > 0 and rate <= 1),
-    currency          text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
+    currency          text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP')),
     created_at        timestamptz not null default now()
 );
 
@@ -98,7 +98,7 @@ create table if not exists public.bets (
     stake          numeric(18, 2) not null check (stake > 0),
     total_odds     numeric(18, 4) not null check (total_odds >= 1),
     potential_win  numeric(18, 2) not null check (potential_win >= 0),
-    currency       text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR')),
+    currency       text not null default 'GHS' check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP')),
     status         text not null default 'pending'
                    check (status in ('pending', 'won', 'lost')),
     settled_at     timestamptz,
@@ -408,14 +408,14 @@ begin
     ) then
         alter table public.users
             add constraint users_country_check
-            check (country in ('GH', 'NG', 'KE', 'ZA'));
+            check (country in ('GH', 'NG', 'KE', 'ZA', 'UG', 'TZ', 'CM', 'ZM', 'CI', 'RW', 'US', 'GB'));
     end if;
     if not exists (
         select 1 from pg_constraint where conname = 'users_currency_check'
     ) then
         alter table public.users
             add constraint users_currency_check
-            check (currency in ('GHS', 'NGN', 'KES', 'ZAR'));
+            check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP'));
     end if;
 end $$;
 
@@ -436,7 +436,7 @@ begin
     ) then
         alter table public.bets
             add constraint bets_currency_check
-            check (currency in ('GHS', 'NGN', 'KES', 'ZAR'));
+            check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP'));
     end if;
 end $$;
 
@@ -451,7 +451,7 @@ begin
     ) then
         alter table public.commissions
             add constraint commissions_currency_check
-            check (currency in ('GHS', 'NGN', 'KES', 'ZAR'));
+            check (currency in ('GHS', 'NGN', 'KES', 'ZAR', 'UGX', 'TZS', 'XAF', 'ZMW', 'XOF', 'RWF', 'USD', 'GBP'));
     end if;
 end $$;
 

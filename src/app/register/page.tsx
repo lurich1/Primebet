@@ -12,6 +12,14 @@ const COUNTRIES = [
   { dial: "234", iso: "NG", flag: "🇳🇬", kyc: "BVN or NIN (optional)", kycHint: "11 digits", needsKyc: false },
   { dial: "254", iso: "KE", flag: "🇰🇪", kyc: "National ID number", kycHint: "7–8 digits", needsKyc: true },
   { dial: "27", iso: "ZA", flag: "🇿🇦", kyc: "ID number", kycHint: "13 digits", needsKyc: true },
+  { dial: "256", iso: "UG", flag: "🇺🇬", kyc: "National ID (NIN)", kycHint: "optional", needsKyc: false },
+  { dial: "255", iso: "TZ", flag: "🇹🇿", kyc: "National ID", kycHint: "optional", needsKyc: false },
+  { dial: "237", iso: "CM", flag: "🇨🇲", kyc: "National ID", kycHint: "optional", needsKyc: false },
+  { dial: "260", iso: "ZM", flag: "🇿🇲", kyc: "National ID", kycHint: "optional", needsKyc: false },
+  { dial: "225", iso: "CI", flag: "🇨🇮", kyc: "National ID", kycHint: "optional", needsKyc: false },
+  { dial: "250", iso: "RW", flag: "🇷🇼", kyc: "National ID", kycHint: "optional", needsKyc: false },
+  { dial: "1", iso: "US", flag: "🇺🇸", kyc: "SSN (last 4)", kycHint: "optional", needsKyc: false },
+  { dial: "44", iso: "GB", flag: "🇬🇧", kyc: "ID number", kycHint: "optional", needsKyc: false },
 ] as const;
 
 const inputCls =
