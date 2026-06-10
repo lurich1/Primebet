@@ -273,17 +273,19 @@ export default function TowerRushPage() {
               <X className="w-5 h-5" strokeWidth={2.5} />
             </button>
 
-            {/* Trophy popping above the card */}
-            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-40 h-40 pointer-events-none">
-              <Image src="/won_trophy_image.png" alt="Trophy" fill priority className="object-contain drop-shadow-[0_10px_22px_rgba(245,180,30,0.5)]" />
+            {/* Trophy popping above the card, on a soft glow */}
+            <div className="absolute -top-[72px] left-1/2 -translate-x-1/2 w-44 h-44 pointer-events-none">
+              <div aria-hidden className="absolute inset-0 m-auto w-28 h-28 rounded-full bg-amber-300/45 blur-2xl" />
+              <Image src="/won_trophy_image.png" alt="Trophy" fill priority className="object-contain drop-shadow-[0_12px_24px_rgba(245,180,30,0.55)]" />
             </div>
 
             {/* Ribbon banner */}
-            <div className="relative mx-auto -mt-3 mb-4 w-fit">
-              <span aria-hidden className="absolute -left-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-r-[14px] border-r-[#9c2c0c]" />
-              <span aria-hidden className="absolute -right-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-l-[14px] border-l-[#9c2c0c]" />
-              <div className="relative px-8 py-2 rounded-md bg-gradient-to-b from-[#ff5a3c] to-[#e23a1e] shadow-md">
-                <span className="text-2xl font-extrabold tracking-wide text-[#ffd84d]" style={{ WebkitTextStroke: '1px #b3340f', textShadow: '0 2px 0 rgba(0,0,0,0.2)' }}>
+            <div className="relative mx-auto -mt-2 mb-4 w-fit">
+              <span aria-hidden className="absolute -left-4 top-1/2 -translate-y-1/2 w-0 h-0 border-y-[18px] border-y-transparent border-r-[16px] border-r-[#9c2c0c]" />
+              <span aria-hidden className="absolute -right-4 top-1/2 -translate-y-1/2 w-0 h-0 border-y-[18px] border-y-transparent border-l-[16px] border-l-[#9c2c0c]" />
+              <div className="relative px-10 py-2.5 rounded-md bg-gradient-to-b from-[#ff6a45] to-[#dd3417] shadow-lg ring-2 ring-[#b3340f]">
+                <span aria-hidden className="absolute inset-x-2 top-1 h-1/3 rounded bg-white/15" />
+                <span className="relative text-2xl sm:text-[26px] font-black tracking-wide text-[#ffe04a]" style={{ WebkitTextStroke: '1px #a82d0c', textShadow: '0 2px 0 rgba(0,0,0,0.25)' }}>
                   YOU WON
                 </span>
               </div>
@@ -299,18 +301,19 @@ export default function TowerRushPage() {
             )}
 
             {/* Collect */}
-            <div className="mt-6">
+            <div className="relative z-10 mt-6">
               <button
                 type="button"
                 onClick={() => setWin(null)}
-                className="w-full h-12 rounded-full bg-gradient-to-b from-[#39d353] to-[#1da53a] text-white font-extrabold text-sm shadow-md active:translate-y-0.5 transition-transform"
+                className="relative overflow-hidden w-full h-12 rounded-full bg-gradient-to-b from-[#45dd5f] to-[#1da53a] text-white font-extrabold text-sm shadow-md active:translate-y-0.5 transition-transform"
               >
-                COLLECT
+                <span aria-hidden className="absolute inset-x-2 top-1 h-1/3 rounded-full bg-white/25" />
+                <span className="relative">COLLECT</span>
               </button>
             </div>
 
-            {/* Confetti dots along the bottom */}
-            <div aria-hidden className="absolute bottom-0 left-0 right-0 h-7 rounded-b-3xl opacity-40" style={{ backgroundImage: 'radial-gradient(circle, #f59e0b 1.5px, transparent 0)', backgroundSize: '12px 12px' }} />
+            {/* Gold confetti strip along the bottom */}
+            <div aria-hidden className="absolute bottom-0 left-0 right-0 h-9 rounded-b-3xl opacity-70" style={{ backgroundImage: 'radial-gradient(circle, #f6c343 2px, transparent 0)', backgroundSize: '10px 10px' }} />
           </div>
         </div>
       )}
