@@ -262,49 +262,55 @@ export default function TowerRushPage() {
 
       {/* ─── Win celebration splash (SportyBet-style, same as football) ─── */}
       {win && (
-        <div className="fixed inset-0 z-[60] flex flex-col items-center px-5 sm:px-6 bg-black/90 animate-in fade-in duration-300">
-          <button
-            type="button"
-            onClick={() => setWin(null)}
-            aria-label="Close"
-            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition-colors"
-          >
-            <X className="w-6 h-6" strokeWidth={2.5} />
-          </button>
-
-          <div className="mt-16 sm:mt-20 text-center">
-            <p className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight drop-shadow-lg">YOU WON</p>
-            <p className="mt-2 text-3xl sm:text-4xl font-bold text-white tabular-nums drop-shadow-md">
-              {currency} {fmt(win.amount)}
-            </p>
-            <p className="mt-1 text-xl font-extrabold text-[#8effa1] tabular-nums">x{coeffStr(win.coeff)}</p>
-          </div>
-
-          <div className="relative flex-1 w-full mt-1 sm:mt-2 min-h-0 max-w-md">
-            <Image
-              src="/won_trophy_image.png"
-              alt="Trophy"
-              fill
-              priority
-              className="object-contain drop-shadow-[0_0_50px_rgba(255,200,0,0.55)]"
-            />
-          </div>
-
-          {win.code && (
-            <p className="mt-1 text-sm sm:text-base text-white text-center">
-              <span className="font-medium text-white/80">Round: </span>
-              <span className="font-mono font-bold tracking-wider tabular-nums">{win.code}</span>
-            </p>
-          )}
-
-          <div className="mt-3 mb-6 w-full max-w-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-5 bg-black/70 animate-in fade-in duration-300">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl px-6 pt-20 pb-6 text-center animate-in zoom-in-95 duration-300">
             <button
               type="button"
               onClick={() => setWin(null)}
-              className="w-full h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] text-white font-black text-base"
+              aria-label="Close"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 text-gray-500 hover:bg-black/10 flex items-center justify-center transition-colors"
             >
-              Collect
+              <X className="w-5 h-5" strokeWidth={2.5} />
             </button>
+
+            {/* Trophy popping above the card */}
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-40 h-40 pointer-events-none">
+              <Image src="/won_trophy_image.png" alt="Trophy" fill priority className="object-contain drop-shadow-[0_10px_22px_rgba(245,180,30,0.5)]" />
+            </div>
+
+            {/* Ribbon banner */}
+            <div className="relative mx-auto -mt-3 mb-4 w-fit">
+              <span aria-hidden className="absolute -left-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-r-[14px] border-r-[#9c2c0c]" />
+              <span aria-hidden className="absolute -right-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-l-[14px] border-l-[#9c2c0c]" />
+              <div className="relative px-8 py-2 rounded-md bg-gradient-to-b from-[#ff5a3c] to-[#e23a1e] shadow-md">
+                <span className="text-2xl font-extrabold tracking-wide text-[#ffd84d]" style={{ WebkitTextStroke: '1px #b3340f', textShadow: '0 2px 0 rgba(0,0,0,0.2)' }}>
+                  YOU WON
+                </span>
+              </div>
+            </div>
+
+            {/* Amount + coefficient */}
+            <p className="text-4xl font-extrabold text-gray-900 tabular-nums">
+              {currency} {fmt(win.amount)}
+            </p>
+            <p className="mt-1 text-lg font-extrabold text-emerald-600 tabular-nums">x{coeffStr(win.coeff)}</p>
+            {win.code && (
+              <p className="mt-1.5 text-sm text-gray-500">Tower Rush · Round {win.code}</p>
+            )}
+
+            {/* Collect */}
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setWin(null)}
+                className="w-full h-12 rounded-full bg-gradient-to-b from-[#39d353] to-[#1da53a] text-white font-extrabold text-sm shadow-md active:translate-y-0.5 transition-transform"
+              >
+                COLLECT
+              </button>
+            </div>
+
+            {/* Confetti dots along the bottom */}
+            <div aria-hidden className="absolute bottom-0 left-0 right-0 h-7 rounded-b-3xl opacity-40" style={{ backgroundImage: 'radial-gradient(circle, #f59e0b 1.5px, transparent 0)', backgroundSize: '12px 12px' }} />
           </div>
         </div>
       )}
