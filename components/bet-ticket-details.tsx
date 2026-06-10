@@ -77,64 +77,78 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
     >
       {/* ─── Won celebration splash (SportyBet-style) ─── */}
       {won && showTrophy && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center px-5 sm:px-6 bg-black/90 animate-in fade-in duration-300">
-          {/* Close button — top right */}
-          <button
-            type="button"
-            onClick={() => setShowTrophy(false)}
-            aria-label="Close"
-            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition-colors"
-          >
-            <X className="w-6 h-6" strokeWidth={2.5} />
-          </button>
-
-          {/* Headline — pushed down slightly */}
-          <div className="mt-16 sm:mt-20 text-center">
-            <p className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight drop-shadow-lg">
-              YOU WON
-            </p>
-            <p className="mt-2 text-3xl sm:text-4xl font-bold text-white tabular-nums drop-shadow-md">
-              {cur} {formatMoney(totalReturn, cur)}
-            </p>
-          </div>
-
-          {/* Bigger trophy — no max-width cap, tighter top margin gives it
-              more vertical room. */}
-          <div className="relative flex-1 w-full mt-1 sm:mt-2 min-h-0">
-            <Image
-              src="/won_trophy_image.png"
-              alt="Trophy"
-              fill
-              priority
-              className="object-contain drop-shadow-[0_0_50px_rgba(255,200,0,0.55)]"
-            />
-          </div>
-
-          {/* Verify code — inline, single line */}
-          <p className="mt-1 text-sm sm:text-base text-white text-center">
-            <span className="font-medium text-white/80">Verify Code: </span>
-            <span className="font-mono font-bold tracking-wider tabular-nums">
-              {verificationCode}
-            </span>
-          </p>
-
-          {/* Action buttons container — Details (left), Show Off (right) */}
-          <div className="mt-3 mb-3 w-full max-w-sm flex gap-3">
-            <Button
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-5 bg-black/70 animate-in fade-in duration-300">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl px-6 pt-20 pb-6 text-center animate-in zoom-in-95 duration-300">
+            {/* Close */}
+            <button
               type="button"
               onClick={() => setShowTrophy(false)}
-              variant="outline"
-              className="flex-1 h-12 border-2 border-success text-success bg-transparent hover:bg-success/10 font-bold text-base"
+              aria-label="Close"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 text-gray-500 hover:bg-black/10 flex items-center justify-center transition-colors"
             >
-              Details
-            </Button>
-            <Button
-              type="button"
-              onClick={shareWin}
-              className="flex-1 h-12 bg-success hover:bg-success/90 text-white font-bold text-base gap-1.5"
-            >
-              Show Off
-            </Button>
+              <X className="w-5 h-5" strokeWidth={2.5} />
+            </button>
+
+            {/* Trophy popping above the card */}
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-40 h-40 pointer-events-none">
+              <Image
+                src="/won_trophy_image.png"
+                alt="Trophy"
+                fill
+                priority
+                className="object-contain drop-shadow-[0_10px_22px_rgba(245,180,30,0.5)]"
+              />
+            </div>
+
+            {/* Ribbon banner */}
+            <div className="relative mx-auto -mt-3 mb-4 w-fit">
+              <span aria-hidden className="absolute -left-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-r-[14px] border-r-[#9c2c0c]" />
+              <span aria-hidden className="absolute -right-3 top-1/2 -translate-y-1/2 border-y-[14px] border-y-transparent border-l-[14px] border-l-[#9c2c0c]" />
+              <div className="relative px-8 py-2 rounded-md bg-gradient-to-b from-[#ff5a3c] to-[#e23a1e] shadow-md">
+                <span
+                  className="text-2xl font-extrabold tracking-wide text-[#ffd84d]"
+                  style={{ WebkitTextStroke: '1px #b3340f', textShadow: '0 2px 0 rgba(0,0,0,0.2)' }}
+                >
+                  YOU WON
+                </span>
+              </div>
+            </div>
+
+            {/* Amount */}
+            <p className="text-4xl font-extrabold text-gray-900 tabular-nums">
+              {cur} {formatMoney(totalReturn, cur)}
+            </p>
+            <p className="mt-1.5 text-sm text-gray-500">
+              From Sports Betting · Ticket ID: {ticketId}
+            </p>
+            <p className="mt-1 text-[11px] font-mono text-gray-400 tracking-wide truncate">
+              Verify: {verificationCode}
+            </p>
+
+            {/* Buttons */}
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowTrophy(false)}
+                className="flex-1 h-12 rounded-full bg-gradient-to-b from-[#ffcb52] to-[#f59e0b] text-[#7a3e00] font-extrabold text-sm shadow-md active:translate-y-0.5 transition-transform"
+              >
+                CHECK DETAILS
+              </button>
+              <button
+                type="button"
+                onClick={shareWin}
+                className="flex-1 h-12 rounded-full bg-gradient-to-b from-[#39d353] to-[#1da53a] text-white font-extrabold text-sm shadow-md active:translate-y-0.5 transition-transform"
+              >
+                SHOW OFF
+              </button>
+            </div>
+
+            {/* Confetti dots along the bottom */}
+            <div
+              aria-hidden
+              className="absolute bottom-0 left-0 right-0 h-7 rounded-b-3xl opacity-40"
+              style={{ backgroundImage: 'radial-gradient(circle, #f59e0b 1.5px, transparent 0)', backgroundSize: '12px 12px' }}
+            />
           </div>
         </div>
       )}
