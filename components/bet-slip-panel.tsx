@@ -43,6 +43,7 @@ export function BetSlipPanel({
 }: BetSlipPanelProps) {
   const [tab, setTab] = useState<Tab>('slip')
   const [stake, setStake] = useState('')
+  const [betType, setBetType] = useState<'single' | 'multiple' | 'system'>('multiple')
   const [bookingCode, setBookingCode] = useState('')
   const [loadingCode, setLoadingCode] = useState(false)
   const [statusMsg, setStatusMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
@@ -72,8 +73,16 @@ export function BetSlipPanel({
 
   const totalOdds = selections.reduce((acc, sel) => acc * sel.odds, 1)
   const stakeNum = parseFloat(stake)
-  const potentialWin =
-    Number.isFinite(stakeNum) && stakeNum > 0 ? (stakeNum * totalOdds).toFixed(2) : '0.00'
+  const validStake = Number.isFinite(stakeNum) && stakeNum > 0
+  // Single mode = each selection is its own bet at the entered stake.
+  const isSingle = selections.length <= 1 || betType === 'single'
+  const totalStakeAmount = isSingle ? stakeNum * selections.length : stakeNum
+  const potentialWinNum = !validStake
+    ? 0
+    : isSingle
+      ? selections.reduce((sum, sel) => sum + stakeNum * sel.odds, 0)
+      : stakeNum * totalOdds
+  const potentialWin = potentialWinNum.toFixed(2)
 
   const closedSelections = selections.filter((s) => getBettingState(s.match).closed)
   const hasClosed = closedSelections.length > 0
@@ -95,6 +104,25 @@ export function BetSlipPanel({
       setStatusMsg({ kind: 'err', text: 'Enter a stake amount.' })
       return
     }
+    // Single mode with multiple picks: place each as its own bet.
+    if (isSingle && selections.length > 1) {
+      let placedCount = 0
+      for (const sel of selections) {
+        const p = await placeBet([sel], stakeNum)
+        if (p) placedCount++
+      }
+      if (placedCount > 0) {
+        setStatusMsg({ kind: 'ok', text: `${placedCount} single bet${placedCount > 1 ? 's' : ''} placed.` })
+        setStake('')
+        onClearAll()
+        setTab('open')
+        onPlaced?.()
+      } else {
+        setStatusMsg({ kind: 'err', text: error ?? 'Could not place bets.' })
+      }
+      return
+    }
+
     const placed = await placeBet(selections, stakeNum)
     if (placed) {
       setStatusMsg({
@@ -107,6 +135,29 @@ export function BetSlipPanel({
       onPlaced?.()
     } else {
       setStatusMsg({ kind: 'err', text: error ?? 'Could not place bet.' })
+    }
+  }
+
+  // Book Bet: share/copy the current slip without staking.
+  const handleBookBet = async () => {
+    if (selections.length === 0) {
+      setStatusMsg({ kind: 'err', text: 'Add at least one selection.' })
+      return
+    }
+    const lines = selections.map((raw) => {
+      const s = hydrateLegacySelection(raw)
+      return `${s.outcomeLabel} @ ${s.odds.toFixed(2)} — ${s.match.homeTeam} v ${s.match.awayTeam}`
+    })
+    const text = `My Prime Bet slip:\n${lines.join('\n')}`
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try { await navigator.share({ title: 'Prime Bet slip', text }) } catch { /* cancelled */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text)
+        setStatusMsg({ kind: 'ok', text: 'Slip copied to clipboard.' })
+      } catch {
+        setStatusMsg({ kind: 'err', text: 'Could not copy slip.' })
+      }
     }
   }
 
@@ -183,93 +234,110 @@ export function BetSlipPanel({
             </div>
           ) : (
             <>
+              {/* Header: count + remove all */}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm font-bold">
                   {selections.length} selection{selections.length > 1 ? 's' : ''}
                 </span>
                 <button
                   onClick={onClearAll}
-                  className="text-xs text-destructive hover:text-destructive/80 flex items-center gap-1"
+                  className="text-xs text-destructive hover:text-destructive/80 flex items-center gap-1 cursor-pointer"
                 >
-                  <Trash2 className="w-3 h-3" />
-                  Clear all
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Remove All
                 </button>
               </div>
 
-              <div className="space-y-2">
-                {selections.map((raw) => {
-                  const selection = hydrateLegacySelection(raw)
-                  const sClosed = getBettingState(selection.match).closed
+              {/* Bet-type segmented control */}
+              <div className="grid grid-cols-3 gap-1 p-1 bg-secondary rounded-xl mb-3">
+                {(['single', 'multiple', 'system'] as const).map((t) => {
+                  const disabled = t === 'system' || (t === 'multiple' && selections.length < 2)
+                  const activeT = (isSingle ? 'single' : betType) === t
                   return (
-                  <div
-                    key={selection.id}
-                    className={`bg-secondary rounded-lg p-3 relative ${sClosed ? 'border border-destructive/40' : ''}`}
-                  >
                     <button
-                      onClick={() => onRemoveSelection(selection.id)}
-                      className="absolute top-2 right-2 p-1 hover:bg-background/50 rounded transition-colors"
-                      aria-label="Remove selection"
+                      key={t}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setBetType(t)}
+                      className={`py-2 rounded-lg text-sm font-bold capitalize transition-colors ${
+                        activeT
+                          ? 'bg-primary text-primary-foreground shadow'
+                          : disabled
+                            ? 'text-muted-foreground/40 cursor-not-allowed'
+                            : 'text-muted-foreground hover:text-foreground cursor-pointer'
+                      }`}
                     >
-                      <X className="w-4 h-4 text-muted-foreground" />
+                      {t}
                     </button>
-                    <div className="pr-6">
-                      <p className="text-xs text-muted-foreground mb-1 break-words flex items-center gap-1.5">
-                        {sClosed && <Lock className="w-3 h-3 text-destructive shrink-0" />}
-                        <span className="truncate">
-                          {selection.match.homeTeam} vs {selection.match.awayTeam}
-                        </span>
-                      </p>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            {selection.marketLabel}
-                          </p>
-                          <p className="text-sm font-medium break-words">
-                            {selection.outcomeLabel}
-                          </p>
-                        </div>
-                        <span className={`font-bold shrink-0 ${sClosed ? 'text-muted-foreground line-through' : 'text-primary'}`}>
-                          {selection.odds.toFixed(2)}
-                        </span>
-                      </div>
-                      {sClosed && (
-                        <p className="text-[10px] text-destructive mt-1">
-                          Closed — please remove this leg.
-                        </p>
-                      )}
-                    </div>
-                  </div>
                   )
                 })}
               </div>
 
-              <div className="mt-4 p-3 bg-secondary rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Total Odds</span>
-                  <span className="font-bold text-lg">{totalOdds.toFixed(2)}</span>
-                </div>
+              {/* Selection rows */}
+              <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+                {selections.map((raw) => {
+                  const selection = hydrateLegacySelection(raw)
+                  const sClosed = getBettingState(selection.match).closed
+                  const live = selection.match.isLive
+                  return (
+                    <div key={selection.id} className={`flex items-start gap-2.5 p-3 bg-card ${sClosed ? 'bg-destructive/5' : ''}`}>
+                      <button
+                        onClick={() => onRemoveSelection(selection.id)}
+                        className="mt-0.5 text-muted-foreground hover:text-destructive transition-colors cursor-pointer shrink-0"
+                        aria-label="Remove selection"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-bold text-sm truncate">{selection.outcomeLabel}</p>
+                          <span className={`font-extrabold tabular-nums shrink-0 ${sClosed ? 'text-muted-foreground line-through' : 'text-primary'}`}>
+                            {selection.odds.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1.5">
+                          {live && <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-live/15 text-live shrink-0">Live</span>}
+                          {sClosed && <Lock className="w-3 h-3 text-destructive shrink-0" />}
+                          <span className="truncate">{selection.match.homeTeam} v {selection.match.awayTeam}</span>
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-0.5">{selection.marketLabel}</p>
+                        {sClosed && <p className="text-[10px] text-destructive mt-1">Closed — remove this leg.</p>}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
-              <div className="mt-4">
-                <label className="text-xs text-muted-foreground mb-2 block">Stake Amount</label>
+              {/* Total stake */}
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-sm font-bold">Total Stake</span>
                 <Input
                   type="number"
                   inputMode="decimal"
-                  placeholder="Enter stake"
+                  placeholder="0.00"
                   value={stake}
                   onChange={(e) => setStake(e.target.value)}
-                  className="bg-secondary border-border"
+                  className="w-32 text-right bg-secondary border-border font-bold tabular-nums"
                 />
               </div>
 
-              {stake && (
-                <div className="mt-3 p-3 bg-success/10 border border-success/20 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-success">Potential Win</span>
-                    <span className="font-bold text-success text-lg">{potentialWin}</span>
-                  </div>
+              {/* Totals */}
+              <div className="mt-3 rounded-xl bg-secondary p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Total Odds</span>
+                  <span className="font-bold tabular-nums">{isSingle ? '—' : totalOdds.toFixed(2)}</span>
                 </div>
-              )}
+                {isSingle && selections.length > 1 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total Stake</span>
+                    <span className="font-bold tabular-nums">{validStake ? totalStakeAmount.toFixed(2) : '0.00'}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1.5 border-t border-border/60">
+                  <span className="text-sm font-bold">Potential Win</span>
+                  <span className="text-lg font-extrabold text-success tabular-nums">{potentialWin}</span>
+                </div>
+              </div>
 
               {statusMsg && (
                 <div
@@ -288,19 +356,30 @@ export function BetSlipPanel({
                 </div>
               )}
 
-              <Button
-                onClick={handlePlaceBet}
-                disabled={loading || hasClosed}
-                className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Placing…
-                  </>
-                ) : (
-                  'Place Bet'
-                )}
-              </Button>
+              {/* Action bar: Book Bet | Place Bet */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleBookBet}
+                  disabled={loading}
+                  className="h-12 border-primary/40 text-primary hover:bg-primary/10 font-bold"
+                >
+                  Book Bet
+                </Button>
+                <Button
+                  onClick={handlePlaceBet}
+                  disabled={loading || hasClosed}
+                  className="h-12 bg-success text-white hover:bg-success/90 font-bold shadow-lg shadow-success/20"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Placing…
+                    </>
+                  ) : (
+                    'Place Bet'
+                  )}
+                </Button>
+              </div>
             </>
           )}
 
