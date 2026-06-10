@@ -39,10 +39,10 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
 
   return (
     <div
-      className={`group bg-card border rounded-xl overflow-hidden lift-on-hover ${
+      className={`group bg-card border rounded-2xl overflow-hidden lift-on-hover transition-all duration-200 ${
         betting.closed
           ? 'border-border/70 opacity-95'
-          : 'border-border hover:border-primary/40'
+          : 'border-border hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'
       }`}
     >
       {/* League header strip */}
@@ -210,18 +210,18 @@ function OddsButton({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
-      className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 rounded-lg font-semibold transition-all duration-150 ${
+      className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 rounded-xl font-semibold transition-all duration-150 cursor-pointer disabled:cursor-not-allowed ${
         disabled
-          ? 'bg-secondary/40 text-muted-foreground cursor-not-allowed opacity-60'
+          ? 'bg-secondary/40 text-muted-foreground opacity-60'
           : selected
-            ? 'bg-primary text-primary-foreground shadow-card-pressed scale-[0.98]'
-            : 'bg-secondary text-foreground hover:bg-secondary/70 hover:-translate-y-0.5 hover:shadow-card active:scale-95'
+            ? 'bg-gradient-to-b from-primary to-primary/85 text-primary-foreground ring-1 ring-primary/60 shadow-[0_6px_18px_-4px] shadow-primary/50 scale-[0.98]'
+            : 'bg-secondary/70 text-foreground ring-1 ring-border/60 hover:ring-primary/50 hover:bg-secondary hover:-translate-y-0.5 active:scale-95'
       }`}
     >
       <span className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${selected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
         {label}
       </span>
-      <span className="text-base sm:text-lg font-extrabold tabular-nums leading-none">
+      <span className={`text-lg sm:text-xl font-extrabold tabular-nums leading-none ${selected ? '' : 'text-foreground'}`}>
         {value.toFixed(2)}
       </span>
     </button>
