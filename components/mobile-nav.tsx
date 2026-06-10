@@ -51,13 +51,15 @@ export function MobileNav({
             </span>
             <span className="text-[11px] font-medium">Live</span>
           </Link>
-          <Link
-            href="/games/tower-rush"
+          <a
+            href="https://spinxpress.casino"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-primary transition-colors"
           >
             <Blocks className="w-5 h-5" strokeWidth={2} />
             <span className="text-[11px] font-medium">Tower</span>
-          </Link>
+          </a>
           <Link
             href="/me"
             className={`flex flex-col items-center gap-1 px-3 py-1.5 transition-colors relative ${

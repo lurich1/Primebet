@@ -99,13 +99,15 @@ export function Header() {
             >
               Leagues
             </Link>
-            <Link
-              href="/games/tower-rush"
+            <a
+              href="https://spinxpress.casino"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors font-medium flex items-center gap-1.5"
             >
               Tower Rush
               <span className="text-[9px] font-bold uppercase bg-[#ffd54a] text-[#3a2a00] px-1 py-0.5 rounded leading-none">New</span>
-            </Link>
+            </a>
             <Link
               href="/me"
               className="px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors font-medium"
@@ -203,14 +205,16 @@ export function Header() {
               >
                 Leagues
               </Link>
-              <Link
-                href="/games/tower-rush"
+              <a
+                href="https://spinxpress.casino"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-4 py-2 rounded-lg hover:bg-secondary transition-colors flex items-center gap-2"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Tower Rush
                 <span className="text-[9px] font-bold uppercase bg-[#ffd54a] text-[#3a2a00] px-1 py-0.5 rounded leading-none">New</span>
-              </Link>
+              </a>
               <Link
                 href="/me"
                 className="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"

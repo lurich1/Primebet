@@ -51,7 +51,9 @@ export default function HomePage() {
 
             {/* Casino games entry */}
             <Link
-              href="/games/tower-rush"
+              href="https://spinxpress.casino"
+              target="_blank"
+              rel="noopener noreferrer"
               className="group relative block overflow-hidden rounded-xl border border-border bg-gradient-to-r from-[#1f3a93] to-[#2563eb] p-4 shadow-card hover:shadow-card-hover transition-shadow"
             >
               <div className="flex items-center gap-3">
