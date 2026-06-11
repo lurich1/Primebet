@@ -266,6 +266,14 @@ function PaymentModal({
   const amt = parseFloat(amount);
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
   const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
+  // Networks authorize differently: MTN/AirtelTigo push a PIN prompt; Telecel
+  // Cash is approved by the customer dialing *110#.
+  const approvalHint =
+    network === "telecel"
+      ? "On your phone, dial *110# → approve the payment to complete your deposit."
+      : network === "airteltigo"
+        ? "Approve the AirtelTigo Money prompt on your phone to complete your deposit."
+        : "Approve the MTN MoMo prompt with your PIN to complete your deposit.";
 
   async function pollDeposit(reference: string) {
     const TERMINAL_FAIL = [
@@ -279,7 +287,7 @@ function PaymentModal({
         const s = data.status as string;
         if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
         if (TERMINAL_FAIL.includes(s)) { setError("Payment was not completed. Please try again."); return; }
-        setStatus("Waiting for your approval…");
+        setStatus("Waiting for your approval — " + approvalHint);
       } catch {
         /* transient — keep polling */
       }
@@ -343,7 +351,7 @@ function PaymentModal({
         setBusy(false);
         return;
       }
-      setStatus("Approve the prompt on your phone…");
+      setStatus(approvalHint);
       await pollDeposit(otpRef);
     } catch {
       setError("Network error — please try again.");
@@ -397,6 +405,11 @@ function PaymentModal({
             <p className="text-[13px] text-[var(--color-ink-dim)]">
               Enter the verification code sent by SMS to <span className="font-semibold text-white num">{phone.trim()}</span>.
             </p>
+            {network === "telecel" && (
+              <p className="text-[12px] text-[var(--color-amber)] bg-[var(--color-amber)]/10 border border-[var(--color-amber)]/25 rounded-lg px-3 py-2">
+                Telecel Cash: after the code, <span className="font-semibold">dial *110#</span> on your phone and approve the payment — there&apos;s no pop-up prompt.
+              </p>
+            )}
             <div>
               <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Verification code</label>
               <input
