@@ -212,9 +212,10 @@ export async function chargeMoolreDirect(
 
   const res = await fetch(MOOLRE_PAYMENT_ENDPOINT, {
     method: 'POST',
+    // Exactly ONE pubkey header — sending two case-variants makes fetch combine
+    // them into "key, key", which Moolre rejects as AIN01 Authentication Error.
     headers: {
       'X-Api-Pubkey': pubKey,
-      'X-API-PUBKEY': pubKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
@@ -264,7 +265,6 @@ export async function getMoolreDirectStatus(
     method: 'POST',
     headers: {
       'X-Api-Pubkey': pubKey,
-      'X-API-PUBKEY': pubKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
