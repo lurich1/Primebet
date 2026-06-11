@@ -44,26 +44,31 @@ export async function POST(request: Request) {
     otpcode,
   })
 
+  // TEMP diagnostic — surface Moolre's exact reply so we can see what happens
+  // after a valid OTP (does it trigger the PIN prompt, or need a re-charge?).
+  const moolre = { code: charge.code, message: charge.message }
+  console.log('[moolre/direct/otp] charge reply', { reference, ...moolre, ok: charge.ok })
+
   if (charge.otpInvalid) {
     return NextResponse.json(
-      { status: 'otp-invalid', error: 'Incorrect or expired code. Please try again.' },
+      { status: 'otp-invalid', error: 'Incorrect or expired code. Please try again.', moolre },
       { status: 200 },
     )
   }
   // Still asking for OTP — the code didn't take.
   if (charge.otpRequired) {
     return NextResponse.json(
-      { status: 'otp', error: 'Verification still pending — re-enter the code.' },
+      { status: 'otp', error: 'Verification still pending — re-enter the code.', moolre },
       { status: 200 },
     )
   }
   if (!charge.ok) {
     return NextResponse.json(
-      { status: 'failed', error: charge.message ?? 'Payment could not be completed.' },
+      { status: 'failed', error: charge.message ?? 'Payment could not be completed.', moolre },
       { status: 200 },
     )
   }
 
   // OTP accepted — the collection is now in flight; the UI polls /status.
-  return NextResponse.json({ status: 'pending', reference }, { status: 200 })
+  return NextResponse.json({ status: 'pending', reference, moolre }, { status: 200 })
 }

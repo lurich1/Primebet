@@ -328,20 +328,21 @@ function PaymentModal({
         body: JSON.stringify({ reference: otpRef, otpcode: otp.trim() }),
       });
       const data = await res.json();
+      const diag = data.moolre ? ` [${data.moolre.code ?? "?"}: ${data.moolre.message ?? ""}]` : "";
       if (data.status === "already-credited" || data.status === "success") {
         setDone(true); onSuccess(); return;
       }
       if (data.status === "otp-invalid" || data.status === "otp") {
-        setError(data.error ?? "Incorrect code. Please try again.");
+        setError((data.error ?? "Incorrect code. Please try again.") + diag);
         setBusy(false);
         return;
       }
       if (data.status !== "pending") {
-        setError(data.error ?? "Payment could not be completed.");
+        setError((data.error ?? "Payment could not be completed.") + diag);
         setBusy(false);
         return;
       }
-      setStatus("Approve the prompt on your phone…");
+      setStatus("Approve the prompt on your phone…" + diag);
       await pollDeposit(otpRef);
     } catch {
       setError("Network error — please try again.");
