@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'payment context lost — start again' }, { status: 400 })
   }
 
-  const charge = await chargeMoolreDirect({
+  let charge = await chargeMoolreDirect({
     payer,
     amount: pending.amount,
     reference: 'Wallet topup',
@@ -44,8 +44,19 @@ export async function POST(request: Request) {
     otpcode,
   })
 
-  // TEMP diagnostic — surface Moolre's exact reply so we can see what happens
-  // after a valid OTP (does it trigger the PIN prompt, or need a re-charge?).
+  // TP17 = "Phone no. Verification Successful" — the OTP only verified the
+  // number; it did NOT debit. Re-submit the charge (now that the number is
+  // verified) to actually initiate the collection + MoMo PIN prompt.
+  if (charge.code === 'TP17') {
+    charge = await chargeMoolreDirect({
+      payer,
+      amount: pending.amount,
+      reference: 'Wallet topup',
+      externalref: reference,
+      currency: pending.currency,
+    })
+  }
+
   const moolre = { code: charge.code, message: charge.message }
   console.log('[moolre/direct/otp] charge reply', { reference, ...moolre, ok: charge.ok })
 
