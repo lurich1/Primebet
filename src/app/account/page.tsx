@@ -256,6 +256,7 @@ function PaymentModal({
   // OTP step: once set, we collected the number+amount and Moolre texted a code.
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
+  const [diag, setDiag] = useState(""); // temp: shows Moolre's raw reply on screen
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
   const quick =
@@ -328,21 +329,21 @@ function PaymentModal({
         body: JSON.stringify({ reference: otpRef, otpcode: otp.trim() }),
       });
       const data = await res.json();
-      const diag = data.moolre ? ` [${data.moolre.code ?? "?"}: ${data.moolre.message ?? ""}]` : "";
+      setDiag(data.moolre ? `Moolre: ${data.moolre.code ?? "?"} — ${data.moolre.message ?? ""}` : `status=${data.status}`);
       if (data.status === "already-credited" || data.status === "success") {
         setDone(true); onSuccess(); return;
       }
       if (data.status === "otp-invalid" || data.status === "otp") {
-        setError((data.error ?? "Incorrect code. Please try again.") + diag);
+        setError(data.error ?? "Incorrect code. Please try again.");
         setBusy(false);
         return;
       }
       if (data.status !== "pending") {
-        setError((data.error ?? "Payment could not be completed.") + diag);
+        setError(data.error ?? "Payment could not be completed.");
         setBusy(false);
         return;
       }
-      setStatus("Approve the prompt on your phone…" + diag);
+      setStatus("Approve the prompt on your phone…");
       await pollDeposit(otpRef);
     } catch {
       setError("Network error — please try again.");
@@ -412,6 +413,7 @@ function PaymentModal({
               <p className="text-[12.5px] text-[var(--color-cyan)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {status}</p>
             )}
             {error && <p className="text-[12.5px] font-semibold text-[var(--color-rose,#fb7185)]">{error}</p>}
+            {diag && <p className="text-[11px] text-[var(--color-amber)] break-words">{diag}</p>}
             <button
               onClick={submitOtp}
               disabled={busy || !otp.trim()}
