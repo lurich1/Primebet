@@ -255,49 +255,28 @@ function PaymentModal({
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
   const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
 
-  async function pollDeposit(reference: string) {
-    // Poll until terminal. ~90s budget at 3s intervals.
-    const TERMINAL_FAIL = [
-      "failed", "status-failed", "no-user", "credit-failed", "unknown-reference",
-    ];
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const res = await fetch(`/api/payments/moolre/direct/status?reference=${encodeURIComponent(reference)}`);
-        const data = await res.json();
-        const s = data.status as string;
-        if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
-        if (TERMINAL_FAIL.includes(s)) {
-          setError("Payment was not completed. Please try again.");
-          return;
-        }
-        setStatus("Waiting for you to approve the prompt on your phone…");
-      } catch {
-        /* transient — keep polling */
-      }
-    }
-    setError("Timed out waiting for approval. If you approved it, your balance will update shortly.");
-  }
-
   async function deposit() {
     setError(null);
     setBusy(true);
-    setStatus("Sending Mobile Money prompt…");
+    setStatus("Opening secure checkout…");
     try {
-      // Direct (in-app) MoMo: the customer gets a PIN prompt on their phone —
-      // no hosted page. We then poll for the result and auto-credit.
-      const res = await fetch("/api/payments/moolre/direct/start", {
+      // Hosted Moolre checkout: get a one-time URL and send the customer there
+      // to pay (MTN / Telecel / AirtelTigo). Moolre confirms + auto-credits on
+      // return. No API-transaction activation required.
+      const res = await fetch("/api/payments/moolre/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim() }),
+        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Could not start the deposit."); return; }
-      setStatus(data.displayText ?? "Approve the prompt on your phone…");
-      await pollDeposit(data.reference);
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Could not start the deposit.");
+        setBusy(false);
+        return;
+      }
+      window.location.href = data.url as string;
     } catch {
       setError("Network error — please try again.");
-    } finally {
       setBusy(false);
     }
   }
@@ -344,22 +323,26 @@ function PaymentModal({
           </div>
         ) : (
           <div className="p-5 space-y-4">
-            <div>
-              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">
-                {type === "deposit" ? "MTN MoMo number" : "Mobile-money number"}
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={busy}
-                placeholder="0244 XXX XXX"
-                className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
-              />
-              {type === "deposit" && (
-                <p className="text-[11px] text-[var(--color-ink-faint)] mt-1.5">You&apos;ll get a prompt on this number to approve with your MoMo PIN.</p>
-              )}
-            </div>
+            {type === "deposit" ? (
+              <div className="flex items-start gap-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
+                <span className="text-[18px] leading-none">🔒</span>
+                <p className="text-[12px] text-[var(--color-ink-dim)] leading-relaxed">
+                  Continue to the secure payment page to pay with MTN MoMo, Telecel Cash, or AirtelTigo Money. Your balance updates automatically once paid.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={busy}
+                  placeholder="0244 XXX XXX"
+                  className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Amount</label>
@@ -401,11 +384,11 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || belowMin || !phone.trim()}
+              disabled={busy || !(amt > 0) || belowMin || (type === "withdraw" && !phone.trim())}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {type === "deposit" ? (busy ? "Awaiting approval…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
+              {type === "deposit" ? (busy ? "Redirecting…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>
         )}
