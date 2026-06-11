@@ -458,14 +458,14 @@ function PaymentModal({
         ) : (
           <div className="p-5 space-y-4">
             {type === "deposit" ? (
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
-                <div className="flex -space-x-1.5">
+              <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
+                <div className="flex items-center gap-2">
                   {NETWORKS.map((n) => (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img key={n.id} src={n.logo} alt={n.name} className="w-7 h-7 rounded-md object-contain ring-2 ring-[var(--color-surface-2)]" />
+                    <img key={n.id} src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain shrink-0" />
                   ))}
                 </div>
-                <p className="text-[12px] text-[var(--color-ink-dim)] leading-snug">
+                <p className="text-[12px] text-[var(--color-ink-dim)] leading-snug mt-2.5">
                   Continue to the secure page to pay with MTN MoMo, Telecel Cash or AirtelTigo Money — your balance updates automatically once paid.
                 </p>
               </div>
