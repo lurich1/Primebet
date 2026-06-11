@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * TEMPORARY diagnostic — reveals what Moolre config the deployment actually
- * loaded (masked) and runs a live Moolre auth check, so we can see whether the
- * public key + account number on Vercel match. Gated by the admin password:
- *   /api/payments/moolre/debug?pw=<ADMIN_PASSWORD>
- * Remove this route once deposits are confirmed working.
- */
 // Temporary fixed token so we can read the deployed config regardless of how
 // ADMIN_PASSWORD is set on Vercel. Exposes only masked values — removed after.
 const DEBUG_TOKEN = 'moolre-check-9f3a2b'
@@ -21,37 +15,46 @@ export async function GET(request: Request) {
 
   const pubKey = process.env.MOOLRE_PUBLIC_KEY?.trim() ?? ''
   const account = process.env.MOOLRE_ACCOUNT_NUMBER?.trim() ?? ''
+  const baseEnv = process.env.MOOLRE_BASE_URL?.trim() ?? ''
+  const channel = process.env.MOOLRE_CHANNEL?.trim() || '13'
+  // Exactly what chargeMoolreDirect derives:
+  const base = (baseEnv || 'https://api.moolre.com').replace(/\/$/, '')
 
-  // Live auth check against Moolre with the deployed credentials.
-  let moolre: { httpStatus: number; code: string | null; message: unknown } | { error: string }
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16)
+
+  // Replicate the real charge call with a VALID payer so we hit the auth check.
+  let live: unknown
   try {
-    const r = await fetch('https://api.moolre.com/open/transact/payment', {
+    const r = await fetch(`${base}/open/transact/payment`, {
       method: 'POST',
       headers: { 'X-API-PUBKEY': pubKey, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         type: 1,
-        channel: process.env.MOOLRE_CHANNEL?.trim() || '13',
+        channel,
         currency: 'GHS',
         amount: 1,
-        payer: '000', // invalid on purpose — never charges; we just read the code
+        payer: '0540257689',
         reference: 'debug',
-        externalref: 'debug-check',
+        externalref: 'debug-' + Date.now(),
         accountnumber: account,
       }),
       cache: 'no-store',
     })
     const j = (await r.json().catch(() => ({}))) as { code?: string; message?: unknown }
-    moolre = { httpStatus: r.status, code: j.code ?? null, message: j.message ?? null }
+    live = { httpStatus: r.status, code: j.code ?? null, message: j.message ?? null }
   } catch (e) {
-    moolre = { error: e instanceof Error ? e.message : 'fetch failed' }
+    live = { error: e instanceof Error ? e.message : 'fetch failed' }
   }
 
   return NextResponse.json({
+    baseUrlUsed: base,
+    baseUrlEnvSet: baseEnv || '(not set → default)',
+    channel,
     accountNumberLoaded: account || '(empty)',
-    accountNumberLooksNew: account === '10877906070880',
-    pubKeyLoaded: pubKey ? `…${pubKey.slice(-14)} (len ${pubKey.length})` : '(empty)',
-    pubKeyLooksNew: pubKey.endsWith('mGMTRN6dUHaMjso11At45OidVPwBg6vMyx0bPERGy0U'),
-    moolreAuthCheck: moolre,
-    hint: 'AIN01 = key/account mismatch. TR03/TP14 = auth OK. Both *LooksNew must be true.',
+    accountSha16: sha(account),
+    pubKeyLen: pubKey.length,
+    pubKeySha16: sha(pubKey),
+    liveChargeCheck: live,
+    note: 'Compare accountSha16 / pubKeySha16 to the known-good local hashes. liveChargeCheck TP14 = good, AIN01 = bad creds, anything else = base/channel issue.',
   })
 }
