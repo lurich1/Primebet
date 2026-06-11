@@ -65,6 +65,21 @@ export default function AccountPage() {
     void refresh();
   }, [refresh]);
 
+  // Safety net: on load, credit any Moolre deposit that settled while the user
+  // was away (poll timed out / page closed). Refresh the balance if it credits.
+  useEffect(() => {
+    const id = getUserId();
+    if (!id) return;
+    fetch("/api/payments/moolre/direct/reconcile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d?.credited > 0) void refresh(); })
+      .catch(() => {});
+  }, [refresh]);
+
   function signOut() {
     clearUserSession();
     router.push("/login");
@@ -279,7 +294,8 @@ function PaymentModal({
     const TERMINAL_FAIL = [
       "failed", "status-failed", "no-user", "credit-failed", "unknown-reference",
     ];
-    for (let i = 0; i < 30; i++) {
+    // Poll up to ~4 minutes — Telecel (*110#) approvals can be slow.
+    for (let i = 0; i < 80; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       try {
         const res = await fetch(`/api/payments/moolre/direct/status?reference=${encodeURIComponent(reference)}`);
@@ -292,7 +308,7 @@ function PaymentModal({
         /* transient — keep polling */
       }
     }
-    setError("Timed out. If you approved it, your balance will update shortly.");
+    setError("Still waiting for confirmation. If you approved the payment, your balance will update once it settles — refresh in a minute.");
   }
 
   // Step 1 — collect number + amount, kick off the charge (Moolre texts an OTP).
