@@ -22,6 +22,13 @@ interface AccountUser {
   phone: string | null;
 }
 
+// Mobile-money networks. Moolre's channel auto-detects the network from the
+// number, so this is for the customer to confirm their wallet.
+const NETWORKS = [
+  { id: "mtn", name: "MTN MoMo", icon: "📱" },
+  { id: "telecel", name: "Telecel Cash", icon: "📲" },
+  { id: "airteltigo", name: "AirtelTigo", icon: "💳" },
+] as const;
 
 export default function AccountPage() {
   const router = useRouter();
@@ -241,6 +248,7 @@ function PaymentModal({
 }) {
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState(user.phone ?? "");
+  const [network, setNetwork] = useState<(typeof NETWORKS)[number]["id"]>("mtn");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [done, setDone] = useState(false);
@@ -287,7 +295,7 @@ function PaymentModal({
       const res = await fetch("/api/payments/moolre/direct/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim() }),
+        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim(), network }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not start the deposit."); setBusy(false); return; }
@@ -421,10 +429,29 @@ function PaymentModal({
           </div>
         ) : (
           <div className="p-5 space-y-4">
+            {type === "deposit" && (
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money network</label>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {NETWORKS.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => setNetwork(n.id)}
+                      disabled={busy}
+                      className={cn("flex flex-col items-center gap-1 rounded-xl border py-3 text-[10.5px] font-semibold transition disabled:opacity-50",
+                        network === n.id ? "border-[var(--color-violet)]/60 bg-[var(--color-surface-2)] text-white glow-violet" : "border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-line-2)]",
+                      )}
+                    >
+                      <span className="text-[20px]">{n.icon}</span>
+                      {n.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">
-                {type === "deposit" ? "MTN MoMo number" : "Mobile-money number"}
-              </label>
+              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
               <input
                 type="tel"
                 value={phone}

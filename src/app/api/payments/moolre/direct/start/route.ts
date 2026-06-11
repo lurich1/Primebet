@@ -10,6 +10,7 @@ interface Body {
   userId?: string
   amount?: number
   phone?: string
+  network?: string // 'mtn' | 'telecel' | 'airteltigo' — channel 13 handles all
   purpose?: 'deposit' | 'verification'
 }
 
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
   const userId = (body.userId ?? '').trim()
   const amount = Number(body.amount)
   const phoneRaw = (body.phone ?? '').trim()
+  const network = (body.network ?? 'mtn').trim()
 
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
-  // Moolre direct (MTN channel) is Ghana / GHS.
+  // Moolre's mobile-money channel is Ghana / GHS.
   if (user.country !== 'GH') {
     return NextResponse.json(
       { error: 'Mobile-money deposits are available for Ghana accounts only.' },
@@ -41,11 +43,12 @@ export async function POST(request: Request) {
     )
   }
 
-  // Moolre wants the local form: starts with 0, no country code.
+  // Moolre wants the local form: starts with 0, no country code. Channel 13
+  // auto-detects MTN / Telecel / AirtelTigo from the number.
   const phone = normalizePhone('GH', phoneRaw)
   if (!phone) {
     return NextResponse.json(
-      { error: 'Enter a valid MTN number, e.g. 0244XXXXXXX' },
+      { error: 'Enter a valid mobile-money number, e.g. 0244XXXXXXX' },
       { status: 400 },
     )
   }
@@ -76,6 +79,7 @@ export async function POST(request: Request) {
         purpose: 'deposit',
         channel: 'mobile_money',
         flow: 'direct',
+        network,
         momoPhone: phone,
         userName: user.name,
         country: 'GH',
