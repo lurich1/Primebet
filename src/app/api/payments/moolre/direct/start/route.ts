@@ -93,6 +93,19 @@ export async function POST(request: Request) {
     currency: user.currency,
   })
 
+  // Moolre sent an SMS OTP to the payer — the UI collects it and posts to
+  // /api/payments/moolre/direct/otp to finish.
+  if (charge.otpRequired) {
+    return NextResponse.json(
+      {
+        reference: externalref,
+        status: 'otp',
+        displayText: 'Enter the verification code sent to your phone.',
+      },
+      { status: 201 },
+    )
+  }
+
   if (!charge.ok) {
     return NextResponse.json(
       { error: charge.message ?? 'Could not start the payment. Please try again.' },

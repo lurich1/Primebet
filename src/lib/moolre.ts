@@ -173,23 +173,43 @@ export interface MoolreChargeInput {
   /** Our unique tracking id — used to poll status later. */
   externalref: string
   currency?: string
+  /** OTP code from the SMS, on the second (verification) call. */
+  otpcode?: string
 }
 
 export interface MoolreChargeResult {
   ok: boolean
+  /** Moolre asked for the SMS OTP (code TP14) — prompt the user for it. */
+  otpRequired: boolean
+  /** OTP was wrong/expired (code TP15) — let the user re-enter / resend. */
+  otpInvalid: boolean
   code: string | null
   message: string | null
   raw: Record<string, unknown>
 }
 
 /**
- * Trigger a direct MoMo debit — the customer gets a PIN prompt on their phone.
- * No hosted page. Poll getMoolreDirectStatus(externalref) for the outcome.
+ * Trigger a direct MoMo collection. Moolre runs an SMS-OTP step first: the
+ * initial call (no otpcode) returns TP14 and texts a code to the payer; call
+ * again with the same externalref + otpcode to complete. Then poll
+ * getMoolreDirectStatus(externalref).
  */
 export async function chargeMoolreDirect(
   input: MoolreChargeInput,
 ): Promise<MoolreChargeResult> {
   const { pubKey, account } = requireCreds()
+  const payload: Record<string, unknown> = {
+    type: 1,
+    channel: MOOLRE_CHANNEL,
+    currency: input.currency ?? 'GHS',
+    amount: input.amount,
+    payer: input.payer,
+    reference: input.reference,
+    externalref: input.externalref,
+    accountnumber: account,
+  }
+  if (input.otpcode) payload.otpcode = input.otpcode
+
   const res = await fetch(MOOLRE_PAYMENT_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -198,16 +218,7 @@ export async function chargeMoolreDirect(
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({
-      type: 1,
-      channel: MOOLRE_CHANNEL,
-      currency: input.currency ?? 'GHS',
-      amount: input.amount,
-      payer: input.payer,
-      reference: input.reference,
-      externalref: input.externalref,
-      accountnumber: account,
-    }),
+    body: JSON.stringify(payload),
     cache: 'no-store',
   })
   const raw = (await res.json().catch(() => ({}))) as {
@@ -216,15 +227,19 @@ export async function chargeMoolreDirect(
     message?: string | string[]
   }
   const ok = isSuccessfulStatus(raw.status)
+  const code = raw.code ?? null
   const message = Array.isArray(raw.message) ? raw.message.join(' · ') : raw.message ?? null
-  if (!ok) {
+  // TP14 = OTP sent / required; TP15 = wrong or expired OTP.
+  const otpRequired = code === 'TP14'
+  const otpInvalid = code === 'TP15'
+  if (!ok && !otpRequired) {
     console.error('[moolre] direct charge rejected', {
-      code: raw.code,
+      code,
       message: raw.message,
       externalref: input.externalref,
     })
   }
-  return { ok, code: raw.code ?? null, message, raw }
+  return { ok, otpRequired, otpInvalid, code, message, raw }
 }
 
 export type MoolreTxState = 'success' | 'pending' | 'failed' | 'not-found'

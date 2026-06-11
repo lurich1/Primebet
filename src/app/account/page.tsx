@@ -245,6 +245,9 @@ function PaymentModal({
   const [status, setStatus] = useState<string>("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // OTP step: once set, we collected the number+amount and Moolre texted a code.
+  const [otpRef, setOtpRef] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
   const quick =
@@ -255,28 +258,86 @@ function PaymentModal({
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
   const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
 
+  async function pollDeposit(reference: string) {
+    const TERMINAL_FAIL = [
+      "failed", "status-failed", "no-user", "credit-failed", "unknown-reference",
+    ];
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const res = await fetch(`/api/payments/moolre/direct/status?reference=${encodeURIComponent(reference)}`);
+        const data = await res.json();
+        const s = data.status as string;
+        if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
+        if (TERMINAL_FAIL.includes(s)) { setError("Payment was not completed. Please try again."); return; }
+        setStatus("Waiting for your approval…");
+      } catch {
+        /* transient — keep polling */
+      }
+    }
+    setError("Timed out. If you approved it, your balance will update shortly.");
+  }
+
+  // Step 1 — collect number + amount, kick off the charge (Moolre texts an OTP).
   async function deposit() {
     setError(null);
     setBusy(true);
-    setStatus("Opening secure checkout…");
+    setStatus("Sending verification code…");
     try {
-      // Hosted Moolre checkout: get a one-time URL and send the customer there
-      // to pay (MTN / Telecel / AirtelTigo). Moolre confirms + auto-credits on
-      // return. No API-transaction activation required.
-      const res = await fetch("/api/payments/moolre/start", {
+      const res = await fetch("/api/payments/moolre/direct/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
+        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim() }),
       });
       const data = await res.json();
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "Could not start the deposit.");
+      if (!res.ok) { setError(data.error ?? "Could not start the deposit."); setBusy(false); return; }
+      if (data.status === "otp") {
+        setOtpRef(data.reference);
+        setStatus("");
         setBusy(false);
         return;
       }
-      window.location.href = data.url as string;
+      // No OTP needed — straight to polling.
+      setStatus(data.displayText ?? "Approve the prompt on your phone…");
+      await pollDeposit(data.reference);
     } catch {
       setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Step 2 — submit the SMS code to complete the charge.
+  async function submitOtp() {
+    if (!otpRef || !otp.trim()) return;
+    setError(null);
+    setBusy(true);
+    setStatus("Verifying code…");
+    try {
+      const res = await fetch("/api/payments/moolre/direct/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference: otpRef, otpcode: otp.trim() }),
+      });
+      const data = await res.json();
+      if (data.status === "already-credited" || data.status === "success") {
+        setDone(true); onSuccess(); return;
+      }
+      if (data.status === "otp-invalid" || data.status === "otp") {
+        setError(data.error ?? "Incorrect code. Please try again.");
+        setBusy(false);
+        return;
+      }
+      if (data.status !== "pending") {
+        setError(data.error ?? "Payment could not be completed.");
+        setBusy(false);
+        return;
+      }
+      setStatus("Approve the prompt on your phone…");
+      await pollDeposit(otpRef);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
       setBusy(false);
     }
   }
@@ -321,28 +382,61 @@ function PaymentModal({
             </p>
             <button onClick={onClose} className="mt-6 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm">Done</button>
           </div>
+        ) : otpRef ? (
+          <div className="p-5 space-y-4">
+            <p className="text-[13px] text-[var(--color-ink-dim)]">
+              Enter the verification code sent by SMS to <span className="font-semibold text-white num">{phone.trim()}</span>.
+            </p>
+            <div>
+              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Verification code</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                disabled={busy}
+                placeholder="Enter code"
+                className="w-full mt-2 num text-[18px] tracking-[0.3em] font-bold text-center bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
+              />
+            </div>
+            {status && !error && (
+              <p className="text-[12.5px] text-[var(--color-cyan)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {status}</p>
+            )}
+            {error && <p className="text-[12.5px] font-semibold text-[var(--color-rose,#fb7185)]">{error}</p>}
+            <button
+              onClick={submitOtp}
+              disabled={busy || !otp.trim()}
+              className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition flex items-center justify-center gap-2"
+            >
+              {busy && <Loader2 size={16} className="animate-spin" />}
+              {busy ? "Verifying…" : `Confirm deposit ${amt > 0 ? money(amt) : ""}`}
+            </button>
+            <button
+              onClick={() => { setOtpRef(null); setOtp(""); setError(null); setStatus(""); }}
+              disabled={busy}
+              className="w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px] disabled:opacity-50"
+            >
+              ← Start over
+            </button>
+          </div>
         ) : (
           <div className="p-5 space-y-4">
-            {type === "deposit" ? (
-              <div className="flex items-start gap-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
-                <span className="text-[18px] leading-none">🔒</span>
-                <p className="text-[12px] text-[var(--color-ink-dim)] leading-relaxed">
-                  Continue to the secure payment page to pay with MTN MoMo, Telecel Cash, or AirtelTigo Money. Your balance updates automatically once paid.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={busy}
-                  placeholder="0244 XXX XXX"
-                  className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">
+                {type === "deposit" ? "MTN MoMo number" : "Mobile-money number"}
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={busy}
+                placeholder="0244 XXX XXX"
+                className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
+              />
+              {type === "deposit" && (
+                <p className="text-[11px] text-[var(--color-ink-faint)] mt-1.5">A verification code is sent to this number, then you approve with your MoMo PIN.</p>
+              )}
+            </div>
 
             <div>
               <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Amount</label>
@@ -384,11 +478,11 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || belowMin || (type === "withdraw" && !phone.trim())}
+              disabled={busy || !(amt > 0) || belowMin || !phone.trim()}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {type === "deposit" ? (busy ? "Redirecting…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
+              {type === "deposit" ? (busy ? "Sending code…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>
         )}
