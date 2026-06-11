@@ -25,9 +25,9 @@ interface AccountUser {
 // Mobile-money networks. Moolre's channel auto-detects the network from the
 // number, so this is for the customer to confirm their wallet.
 const NETWORKS = [
-  { id: "mtn", name: "MTN MoMo", icon: "📱" },
-  { id: "telecel", name: "Telecel Cash", icon: "📲" },
-  { id: "airteltigo", name: "AirtelTigo", icon: "💳" },
+  { id: "mtn", name: "MTN MoMo", logo: "/networks/mtn.svg" },
+  { id: "telecel", name: "Telecel Cash", logo: "/networks/telecel.svg" },
+  { id: "airteltigo", name: "AirtelTigo", logo: "/networks/airteltigo.svg" },
 ] as const;
 
 export default function AccountPage() {
@@ -445,7 +445,8 @@ function PaymentModal({
                         network === n.id ? "border-[var(--color-violet)]/60 bg-[var(--color-surface-2)] text-white glow-violet" : "border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-line-2)]",
                       )}
                     >
-                      <span className="text-[20px]">{n.icon}</span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain" />
                       {n.name}
                     </button>
                   ))}
