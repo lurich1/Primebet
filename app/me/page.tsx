@@ -739,9 +739,7 @@ function MePageInner() {
             {(profile.verificationStep ?? 0) < VERIFICATION_TOTAL ? (
               // Step 0 or 1 — verification deposit panel
               <div className="space-y-4">
-                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
-                  {verificationMessageFor(profile.verificationStep ?? 0)}
-                </div>
+                {/* verification banner removed per request */}
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
                   <span>Verification progress</span>
                   <span className="tabular-nums">
