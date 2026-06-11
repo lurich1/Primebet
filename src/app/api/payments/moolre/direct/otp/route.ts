@@ -44,9 +44,10 @@ export async function POST(request: Request) {
     otpcode,
   })
 
-  // TP17 = "Phone no. Verification Successful" — the OTP only verified the
-  // number; it did NOT debit. Re-submit the charge (now that the number is
-  // verified) to actually initiate the collection + MoMo PIN prompt.
+  // TP17 = "Phone no. Verification Successful" — the OTP verified the number
+  // but didn't debit. Re-submit WITH the same code to push past verification
+  // into the actual collection + MoMo approval. (Re-submitting without the
+  // code just re-triggers a new OTP.)
   if (charge.code === 'TP17') {
     charge = await chargeMoolreDirect({
       payer,
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       reference: 'Wallet topup',
       externalref: reference,
       currency: pending.currency,
+      otpcode,
     })
   }
 
