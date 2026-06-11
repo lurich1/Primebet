@@ -22,13 +22,6 @@ interface AccountUser {
   phone: string | null;
 }
 
-// MoMo providers offered to Ghana accounts. Telecel/Vodafone both settle
-// through Paystack's 'vod' rail.
-const METHODS = [
-  { id: "mtn", provider: "mtn", name: "MTN MoMo", icon: "📱" },
-  { id: "telecel", provider: "vod", name: "Telecel Cash", icon: "📲" },
-  { id: "voda", provider: "vod", name: "Vodafone Cash", icon: "💳" },
-] as const;
 
 export default function AccountPage() {
   const router = useRouter();
@@ -246,7 +239,6 @@ function PaymentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [method, setMethod] = useState<(typeof METHODS)[number]["id"]>("mtn");
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState(user.phone ?? "");
   const [busy, setBusy] = useState(false);
@@ -259,64 +251,32 @@ function PaymentModal({
     type === "deposit"
       ? [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
       : [100, 200, 500, 1000];
-  const provider = METHODS.find((m) => m.id === method)!.provider;
   const amt = parseFloat(amount);
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
   const belowMin = type === "deposit" && amt > 0 && amt < minDeposit;
 
-  async function pollMomo(reference: string, statusPath: string) {
-    // Poll the verify endpoint until terminal. ~60s budget at 3s intervals.
-    const TERMINAL_FAIL = [
-      "failed", "abandoned", "amount-mismatch", "verify-failed",
-      "status-failed", "no-user", "credit-failed", "unknown-reference",
-    ];
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const res = await fetch(`${statusPath}?reference=${encodeURIComponent(reference)}`);
-        const data = await res.json();
-        const s = data.status as string;
-        if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
-        if (s === "sandbox") {
-          setError("MoMo is in SANDBOX test mode — no real money moves and nothing is credited. Switch to production MTN credentials to take real deposits.");
-          return;
-        }
-        if (TERMINAL_FAIL.includes(s)) {
-          setError("Payment was not completed. Please try again.");
-          return;
-        }
-        setStatus("Waiting for you to approve the prompt on your phone…");
-      } catch {
-        /* transient — keep polling */
-      }
-    }
-    setError("Timed out waiting for approval. If you approved it, your balance will update shortly.");
-  }
-
   async function deposit() {
     setError(null);
     setBusy(true);
-    setStatus("Sending mobile-money prompt…");
-    // MTN can settle directly through the MTN MoMo Collections API, but only
-    // once production MoMo credentials are live (set NEXT_PUBLIC_MOMO_LIVE=true).
-    // Until then MTN — like Telecel/Vodafone — goes through Paystack's live
-    // mobile-money rail so real deposits keep working.
-    const useMomo = method === "mtn" && process.env.NEXT_PUBLIC_MOMO_LIVE === "true";
-    const startPath = useMomo ? "/api/payments/momo/start" : "/api/payments/paystack/momo/start";
-    const statusPath = useMomo ? "/api/payments/momo/status" : "/api/payments/paystack/momo/status";
+    setStatus("Opening secure Moolre checkout…");
     try {
-      const res = await fetch(startPath, {
+      // Moolre hosted checkout: we get a one-time URL and redirect the player
+      // there to pay (MTN MoMo / Telecel / AirtelTigo). Moolre then fires our
+      // webhook and the player is auto-credited on return.
+      const res = await fetch("/api/payments/moolre/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim(), provider }),
+        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Could not start the deposit."); return; }
-      setStatus(data.displayText ?? "Approve the prompt on your phone…");
-      await pollMomo(data.reference, statusPath);
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Could not start the deposit.");
+        setBusy(false);
+        return;
+      }
+      window.location.href = data.url as string;
     } catch {
       setError("Network error — please try again.");
-    } finally {
       setBusy(false);
     }
   }
@@ -363,36 +323,26 @@ function PaymentModal({
           </div>
         ) : (
           <div className="p-5 space-y-4">
-            <div>
-              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money network</label>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {METHODS.map((mm) => (
-                  <button
-                    key={mm.id}
-                    onClick={() => setMethod(mm.id)}
-                    disabled={busy}
-                    className={cn("flex flex-col items-center gap-1 rounded-xl border py-3 text-[10.5px] font-semibold transition disabled:opacity-50",
-                      method === mm.id ? "border-[var(--color-violet)]/60 bg-[var(--color-surface-2)] text-white glow-violet" : "border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-line-2)]",
-                    )}
-                  >
-                    <span className="text-[20px]">{mm.icon}</span>
-                    {mm.name}
-                  </button>
-                ))}
+            {type === "deposit" ? (
+              <div className="flex items-start gap-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
+                <span className="text-[18px] leading-none">🔒</span>
+                <p className="text-[12px] text-[var(--color-ink-dim)] leading-relaxed">
+                  You&apos;ll be redirected to <span className="font-semibold text-white">Moolre</span> to pay securely via MTN MoMo, Telecel Cash, or AirtelTigo Money.
+                </p>
               </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={busy}
-                placeholder="0244 XXX XXX"
-                className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
-              />
-            </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={busy}
+                  placeholder="0244 XXX XXX"
+                  className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Amount</label>
@@ -434,11 +384,11 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || !phone.trim() || belowMin}
+              disabled={busy || !(amt > 0) || belowMin || (type === "withdraw" && !phone.trim())}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {type} {amt > 0 ? money(amt) : ""}
+              {type === "deposit" ? (busy ? "Redirecting…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>
         )}
