@@ -153,9 +153,22 @@ export async function verifyMoolreTransaction(
   const raw = (await res.json().catch(() => ({}))) as {
     status?: unknown
     message?: string | string[]
+    data?: { status?: unknown; paid_at?: string | null }
   }
 
-  const ok = res.ok && isSuccessfulStatus(raw.status)
+  // CRITICAL: the TOP-LEVEL `status` only means "the verify lookup succeeded"
+  // (Moolre returns status:true / "Verification successful" even for a
+  // checkout the customer opened but NEVER paid). The ACTUAL payment result is
+  // data.status — "1" = paid, "0" = unpaid/pending — confirmed by paid_at being
+  // set. We must gate crediting on data.status, NOT the envelope status, or we
+  // credit unpaid deposits.
+  const payStatus = raw.data?.status
+  const paidAt = raw.data?.paid_at
+  const paid =
+    isSuccessfulStatus(payStatus) || // data.status === 1 / "1" / true
+    (paidAt != null && String(payStatus) !== '0') // settled (has a paid_at)
+
+  const ok = res.ok && paid
   const message = Array.isArray(raw.message)
     ? raw.message.join(' · ')
     : raw.message ?? null
