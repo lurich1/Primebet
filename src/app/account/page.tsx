@@ -379,9 +379,11 @@ function PaymentModal({
       const res = await fetch("/api/users/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, network: "momo", phone: phone.trim() }),
+        body: JSON.stringify({ userId: user.id, amount: amt, network, phone: phone.trim() }),
       });
       const data = await res.json();
+      // 202 = received & pending operator processing — still a success to the user.
+      if (res.status === 202) { setDone(true); onSuccess(); return; }
       if (!res.ok) { setError(data.error ?? "Withdrawal failed."); return; }
       setDone(true);
       onSuccess();
@@ -394,11 +396,11 @@ function PaymentModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={busy ? undefined : onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-[420px] card rounded-b-none sm:rounded-2xl animate-rise">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-line)]">
           <h3 className="font-display font-extrabold text-[16px] capitalize">{type}</h3>
-          <button onClick={onClose} disabled={busy} className="text-[var(--color-ink-faint)] hover:text-white disabled:opacity-40"><X size={20} /></button>
+          <button onClick={onClose} className="text-[var(--color-ink-faint)] hover:text-white"><X size={20} /></button>
         </div>
 
         {done ? (
@@ -470,6 +472,26 @@ function PaymentModal({
                 </p>
               </div>
             ) : (
+              <>
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Cash out to</label>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {NETWORKS.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => setNetwork(n.id)}
+                      disabled={busy}
+                      className={cn("flex flex-col items-center gap-1 rounded-xl border py-3 text-[10.5px] font-semibold transition disabled:opacity-50",
+                        network === n.id ? "border-[var(--color-violet)]/60 bg-[var(--color-surface-2)] text-white glow-violet" : "border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-line-2)]",
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain" />
+                      {n.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Mobile-money number</label>
                 <input
@@ -481,6 +503,7 @@ function PaymentModal({
                   className="w-full mt-2 num text-[15px] bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3.5 py-3 outline-none focus:border-[var(--color-violet)]/60"
                 />
               </div>
+              </>
             )}
 
             <div>
