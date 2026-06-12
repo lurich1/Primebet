@@ -70,6 +70,26 @@ function countMarkets(book: MarketBook | undefined): number {
   return n
 }
 
+/**
+ * Format a kickoff time for display IN THE VIEWER'S TIMEZONE. The API feed
+ * formats startTime server-side (UTC on the server), which reads wrong for
+ * anyone not on UTC — so we always reformat from the full ISO timestamp on the
+ * client. Shows just the time for today, with a day hint otherwise.
+ */
+function formatKickoff(iso: string | undefined, fallback: string | undefined): string {
+  if (!iso) return fallback ?? 'TBD'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return fallback ?? 'TBD'
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const dayDiff = Math.round((startOfDay(d) - startOfDay(new Date())) / 86_400_000)
+  if (dayDiff === 0) return time
+  if (dayDiff === 1) return `Tmrw ${time}`
+  if (dayDiff === -1) return `Yest ${time}`
+  const date = d.toLocaleDateString([], { day: 'numeric', month: 'short' })
+  return `${date} · ${time}`
+}
+
 const ONE_X_TWO = (o: ApiMatch['odds']): Market[] => [
   { label: '1', odds: o.home },
   { label: 'X', odds: o.draw },
@@ -85,7 +105,7 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
   // Show the match as live the moment it kicks off, even if the feed's isLive
   // flag hasn't caught up yet.
   const live = isLiveNow(api)
-  const kickoff = live ? 'Live' : api.startTime ?? 'TBD'
+  const kickoff = live ? 'Live' : formatKickoff(api.startTimeISO, api.startTime)
   // When live but the feed gave no clock, derive the minute from kickoff.
   const minute = parseMinute(api.minute) ?? (live ? liveMinuteFromKickoff(api) ?? undefined : undefined)
   // Betting closes once a match starts / goes live (or an admin locks it).
