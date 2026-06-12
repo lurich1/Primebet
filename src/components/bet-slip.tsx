@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn, BookmarkPlus, Copy, Check } from "lucide-react";
+import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn, BookmarkPlus, Copy, Check, Share2 } from "lucide-react";
 import { useSlip, totalOdds } from "@/lib/store";
 import type { Selection } from "@/lib/types";
 import { getUserId } from "@/lib/user-session";
@@ -22,6 +22,7 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
   const [booking, setBooking] = useState(false);
   const [bookedCode, setBookedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
   // Loading a booking code back into the slip.
   const [loadCode, setLoadCode] = useState("");
   const [loadingCode, setLoadingCode] = useState(false);
@@ -128,6 +129,35 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
     }).catch(() => {});
   }
 
+  // Share the booking as an image (WhatsApp / status). Falls back to
+  // downloading the PNG when the device can't share files.
+  async function shareImage() {
+    if (!bookedCode || sharing) return;
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/bookings/${bookedCode}/image`);
+      if (!res.ok) throw new Error("image");
+      const blob = await res.blob();
+      const file = new File([blob], `plusebet-${bookedCode}.png`, { type: "image/png" });
+      const text = `Plusebet booking code: ${bookedCode} — load it on Plusebet to play.`;
+      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: "Plusebet booking", text });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `plusebet-${bookedCode}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      // user cancelled the share sheet, or the fetch failed — nothing to do
+    } finally {
+      setSharing(false);
+    }
+  }
+
   // Load a booking code → drop its selections back into the slip.
   async function loadBookingCode() {
     const clean = loadCode.trim();
@@ -191,34 +221,49 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
 
   if (bookedCode) {
     return (
-      <div className="flex flex-col items-center text-center px-5 py-10 animate-rise">
-        <div className="grid place-items-center w-16 h-16 rounded-full grad-violet-pink mb-4 shadow-[0_10px_40px_-8px_rgba(236,72,153,.6)]">
-          <BookmarkPlus className="text-white" size={28} />
+      <div className="flex flex-col items-center text-center px-5 py-8 overflow-y-auto no-scrollbar animate-rise">
+        <div className="grid place-items-center w-14 h-14 rounded-full grad-violet-pink mb-3 shadow-[0_10px_40px_-8px_rgba(236,72,153,.6)]">
+          <BookmarkPlus className="text-white" size={26} />
         </div>
         <h3 className="font-display font-extrabold text-lg">Slip Booked!</h3>
         <p className="text-[13px] text-[var(--color-ink-dim)] mt-1">
-          Share this code or load it later to place the bet.
+          Share the image or the code — load it later to place the bet.
         </p>
+
+        {/* shareable image preview */}
+        <div className="mt-4 w-full rounded-2xl overflow-hidden border border-[var(--color-line)] bg-[var(--color-surface)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/bookings/${bookedCode}/image`}
+            alt={`Booking ${bookedCode}`}
+            className="w-full h-auto block"
+          />
+        </div>
+
+        <button
+          onClick={shareImage}
+          disabled={sharing}
+          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white shadow-[0_10px_30px_-8px_rgba(236,72,153,.5)] disabled:opacity-60 active:scale-[.99] transition"
+        >
+          {sharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+          {sharing ? "Preparing…" : "Share image"}
+        </button>
+
         <button
           onClick={copyCode}
-          className="mt-4 w-full flex items-center justify-between gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3.5 hover:border-[var(--color-violet)]/60 transition group"
+          className="mt-2.5 w-full flex items-center justify-between gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 hover:border-[var(--color-violet)]/60 transition group"
         >
-          <span className="num text-[22px] font-extrabold tracking-[0.2em] grad-text">{bookedCode}</span>
+          <span className="num text-[20px] font-extrabold tracking-[0.2em] grad-text">{bookedCode}</span>
           <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-dim)] group-hover:text-white">
-            {copied ? <><Check size={15} className="text-[var(--color-emerald)]" /> Copied</> : <><Copy size={15} /> Copy</>}
+            {copied ? <><Check size={15} className="text-[var(--color-emerald)]" /> Copied</> : <><Copy size={15} /> Copy code</>}
           </span>
         </button>
+
         <button
           onClick={() => { setBookedCode(null); clear(); onPlaced?.(); }}
-          className="mt-4 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm"
+          className="mt-4 w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px]"
         >
           Done
-        </button>
-        <button
-          onClick={() => setBookedCode(null)}
-          className="mt-2 w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px]"
-        >
-          Back to slip
         </button>
       </div>
     );
