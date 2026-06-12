@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
 import { listPaymentsForUser } from '@/lib/payments-store'
-import { verifyAndCreditMoolreDirect } from '@/lib/moolre-direct-credit'
+import {
+  verifyAndCreditMoolreDirect,
+  verifyAndCreditMoolreHosted,
+} from '@/lib/moolre-direct-credit'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Safety net so an approved payment still credits even if the user closed the
  * page or the live poll timed out. Called when the account page loads: re-check
- * the user's recent pending Moolre direct deposits and credit any that have
- * since settled. Idempotent (verifyAndCreditMoolreDirect guards double-credit).
+ * the user's recent pending Moolre deposits — both the in-app "direct" flow and
+ * the "api-init" hosted-checkout flow — and credit any that have since settled.
+ * Idempotent (the verify-and-credit helpers guard against double-credit).
  */
 export async function POST(request: Request) {
   let body: { userId?: string }
@@ -28,22 +32,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ credited: 0, checked: 0 })
   }
 
-  // Only recent (last 2h) pending direct-Moolre deposits — bounds the upstream
-  // status calls and avoids re-checking ancient abandoned attempts.
+  // Only recent (last 2h) pending Moolre deposits — bounds the upstream status
+  // calls and avoids re-checking ancient abandoned attempts. Covers BOTH the
+  // in-app "direct" flow and the "api-init" hosted-checkout flow (the one the
+  // deposit button actually uses), so a hosted payment that the redirect never
+  // confirmed still credits on the next account-page load.
   const cutoff = Date.now() - 2 * 60 * 60 * 1000
   const pending = payments.filter(
     (p) =>
       p.type === 'deposit' &&
       p.provider === 'moolre' &&
       p.status === 'pending' &&
-      p.metadata?.flow === 'direct' &&
       new Date(p.createdAt).getTime() >= cutoff,
   )
 
   let credited = 0
   for (const p of pending) {
     try {
-      const r = await verifyAndCreditMoolreDirect(p.reference)
+      // Hosted checkout uses the `state: confirm` endpoint; the in-app direct
+      // flow uses the transaction-status endpoint. Default unknown/legacy rows
+      // to the hosted verifier since that's the live deposit path.
+      const r =
+        p.metadata?.flow === 'direct'
+          ? await verifyAndCreditMoolreDirect(p.reference)
+          : await verifyAndCreditMoolreHosted(p.reference)
       if (r.status === 'success' || r.status === 'already-credited') credited++
     } catch {
       /* skip; will retry on next load */
