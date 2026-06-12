@@ -7,7 +7,7 @@
 import type { Match as ApiMatch, MarketBook } from '@/lib/domain-types'
 import type { Match as UiMatch, Market } from '@/lib/types'
 import { getCountryFlag } from '@/lib/country-flags'
-import { getBettingState } from '@/lib/match-betting'
+import { getBettingState, isLiveNow, liveMinuteFromKickoff } from '@/lib/match-betting'
 
 // Short, user-facing label for why betting is closed on a match.
 const LOCK_LABEL: Record<string, string> = {
@@ -82,7 +82,12 @@ const ONE_X_TWO = (o: ApiMatch['odds']): Market[] => [
  * to a generated initials badge + country flag emoji.
  */
 export function apiMatchToUi(api: ApiMatch): UiMatch {
-  const kickoff = api.isLive ? 'Live' : api.startTime ?? 'TBD'
+  // Show the match as live the moment it kicks off, even if the feed's isLive
+  // flag hasn't caught up yet.
+  const live = isLiveNow(api)
+  const kickoff = live ? 'Live' : api.startTime ?? 'TBD'
+  // When live but the feed gave no clock, derive the minute from kickoff.
+  const minute = parseMinute(api.minute) ?? (live ? liveMinuteFromKickoff(api) ?? undefined : undefined)
   // Betting closes once a match starts / goes live (or an admin locks it).
   const bet = getBettingState(api)
   return {
@@ -101,8 +106,8 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     homeLogo: api.homeFlagUrl,
     awayLogo: api.awayFlagUrl,
     kickoff,
-    live: api.isLive,
-    minute: parseMinute(api.minute),
+    live,
+    minute,
     scoreHome: api.homeScore,
     scoreAway: api.awayScore,
     markets: ONE_X_TWO(api.odds),

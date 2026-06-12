@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { findUserById, recordWithdrawal, setUserPhone } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
-import { getCountry, getVerificationAmount, normalizePhone } from '@/lib/countries'
+import { getCountry, getWithdrawQualifyTotal, normalizePhone } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,20 +81,21 @@ export async function POST(request: Request) {
     payoutMeta = { ...payoutMeta, accountNumber, bankName }
   }
 
-  // Gate withdrawals behind the two-step verification (amount is country-aware).
-  const step = user.verificationStep ?? 0
-  const verificationAmount = getVerificationAmount(user.country)
-  const VERIFICATION_TOTAL = 4
-  if (step < VERIFICATION_TOTAL) {
-    const remaining = VERIFICATION_TOTAL - step
-    const verificationMessage = `Account verification in progress (${step}/${VERIFICATION_TOTAL}). ${remaining} more qualifying deposit${remaining === 1 ? '' : 's'} of ${user.currency} ${verificationAmount} required before withdrawal options unlock.`
+  // Gate withdrawals behind a cumulative deposit total (country-aware). The
+  // player must have deposited at least this much (lifetime) before withdrawal
+  // options unlock — e.g. GHS 848 for Ghana.
+  const qualifyTotal = getWithdrawQualifyTotal(user.country)
+  const deposited = user.totalDeposited ?? 0
+  if (deposited < qualifyTotal) {
+    const remaining = +(qualifyTotal - deposited).toFixed(2)
+    const verificationMessage = `Account verification in progress. Deposit a total of ${user.currency} ${qualifyTotal} to unlock withdrawals — you've deposited ${user.currency} ${deposited.toFixed(2)} so far (${user.currency} ${remaining} to go).`
     return NextResponse.json(
       {
         error: verificationMessage,
         verificationRequired: true,
-        verificationStep: step,
-        verificationTotal: VERIFICATION_TOTAL,
-        verificationDepositAmount: verificationAmount,
+        depositedTotal: deposited,
+        qualifyTotal,
+        remaining,
         currency: user.currency,
       },
       { status: 403 },

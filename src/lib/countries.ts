@@ -40,6 +40,11 @@ export interface CountryConfig {
   minFirstDeposit: number
   /** Deposit amount that counts toward the 2-step withdrawal verification gate. */
   verificationAmount: number
+  /**
+   * Cumulative amount a player must DEPOSIT (lifetime total) before withdrawals
+   * unlock. Optional — falls back to verificationAmount × 4 when unset.
+   */
+  withdrawQualifyTotal?: number
   /** Gateway used by deposit flows. */
   gateway: Gateway
   /** Payout target options shown on the withdrawal page. */
@@ -61,8 +66,9 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycLabel: 'Ghana Card number',
     kycPlaceholder: 'GHA-XXXXXXXXX-X',
     kycError: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)',
-    minFirstDeposit: 150,
+    minFirstDeposit: 300,
     verificationAmount: 200,
+    withdrawQualifyTotal: 848,
     gateway: 'moolre',
     payoutTarget: 'mobile',
     payoutNetworks: [
@@ -343,4 +349,17 @@ export function getVerificationAmount(country: CountryCode): number {
   const n = Number(raw)
   if (Number.isFinite(n) && n > 0) return n
   return COUNTRIES[country].verificationAmount
+}
+
+/**
+ * Cumulative lifetime deposit total a player must reach before withdrawals
+ * unlock. Override per-country with WITHDRAW_QUALIFY_<CC> (e.g. WITHDRAW_QUALIFY_GH).
+ * Falls back to verificationAmount × 4 when no explicit total is configured.
+ */
+export function getWithdrawQualifyTotal(country: CountryCode): number {
+  const raw = process.env[`WITHDRAW_QUALIFY_${country}`]
+  const n = Number(raw)
+  if (Number.isFinite(n) && n > 0) return n
+  const cfg = COUNTRIES[country]
+  return cfg.withdrawQualifyTotal ?? cfg.verificationAmount * 4
 }

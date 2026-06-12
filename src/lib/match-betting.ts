@@ -57,6 +57,66 @@ export function minutesUntilStart(startTime: string | undefined, now: Date = new
 }
 
 /**
+ * How long after kickoff we keep treating a match as "live" when the feed
+ * hasn't given us a real clock (covers 90' + half-time + stoppage + buffer).
+ * After this window a kicked-off match is considered finished, not live.
+ */
+export const LIVE_WINDOW_MINUTES = 130
+
+/** Epoch-ms of kickoff from the full ISO timestamp; null if not parseable. */
+function kickoffTime(match: Match): number | null {
+  if (match.startTimeISO) {
+    const t = Date.parse(match.startTimeISO)
+    if (!Number.isNaN(t)) return t
+  }
+  return null
+}
+
+/**
+ * True once the scheduled kickoff time has passed. Prefers the full ISO
+ * timestamp (accurate); falls back to the "HH:MM" start time.
+ */
+export function hasKickedOff(match: Match, now: Date = new Date()): boolean {
+  const k = kickoffTime(match)
+  if (k !== null) return now.getTime() >= k
+  const until = minutesUntilStart(match.startTime, now)
+  return until !== null && until <= 0
+}
+
+/**
+ * Whether to DISPLAY a match as live right now. True if the feed already flags
+ * it live, OR kickoff has passed and we're still inside the live window — so a
+ * game shows "LIVE" the moment it kicks off even before the feed catches up,
+ * without showing live forever after it ends.
+ */
+export function isLiveNow(match: Match, now: Date = new Date()): boolean {
+  if (match.isLive) return true
+  const k = kickoffTime(match)
+  if (k !== null) {
+    const elapsedMin = (now.getTime() - k) / 60000
+    return elapsedMin >= 0 && elapsedMin <= LIVE_WINDOW_MINUTES
+  }
+  // No ISO timestamp: HH:MM can't tell "just kicked off" from "tomorrow" past
+  // an hour, so this only reliably catches the first hour — acceptable fallback.
+  const until = minutesUntilStart(match.startTime, now)
+  return until !== null && until <= 0
+}
+
+/**
+ * Elapsed match minute derived from kickoff, for a live match the feed didn't
+ * give a clock for. Capped at regulation so it doesn't run past 90'.
+ */
+export function liveMinuteFromKickoff(match: Match, now: Date = new Date()): number | null {
+  const k = kickoffTime(match)
+  if (k === null) return null
+  const elapsed = Math.floor((now.getTime() - k) / 60000)
+  if (elapsed < 0) return null
+  const sport = (match.sport ?? 'football').toLowerCase()
+  const regulation = REGULATION_MINUTES[sport] ?? 90
+  return Math.min(elapsed, regulation)
+}
+
+/**
  * For a live football match with minute "85'", returns 5 (90 - 85). For sports
  * without a fixed regulation length we can't compute this and return null.
  */
@@ -100,6 +160,13 @@ export function getBettingState(match: Match, now: Date = new Date()): BettingSt
       return { closed: true, reason: 'finished', minutesRemaining: 0 }
     }
     return { closed: true, reason: 'started', minutesRemaining: left }
+  }
+
+  // Kicked off but the feed hasn't flipped isLive yet — close betting anyway.
+  // Uses the ISO timestamp, so it's correct even hours after kickoff (the
+  // HH:MM check below can't distinguish "started" from "tomorrow").
+  if (hasKickedOff(match, now)) {
+    return { closed: true, reason: 'started', minutesRemaining: 0 }
   }
 
   const untilStart = minutesUntilStart(match.startTime, now)
