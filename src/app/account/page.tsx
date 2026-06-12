@@ -203,31 +203,13 @@ export default function AccountPage() {
         </div>
       </div>
 
-      {/* partner program */}
-      <div className="card p-4 mt-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="grid place-items-center w-9 h-9 rounded-xl bg-[var(--color-amber)]/12 shrink-0 text-[16px]">🤝</span>
-            <div className="min-w-0">
-              <div className="font-display font-bold text-[13.5px]">Partner Program</div>
-              <div className="text-[11.5px] text-[var(--color-ink-dim)] truncate">Earn 70% commission on referrals you bring in.</div>
-            </div>
-          </div>
-          <Link
-            href="/sub-admin/register"
-            className="shrink-0 rounded-xl px-4 py-2 text-[12.5px] font-bold grad-violet-pink text-white hover:brightness-110 transition"
-          >
-            Become a partner
-          </Link>
-        </div>
-      </div>
-
       {modal && user && (
         <PaymentModal
           type={modal}
           user={user}
           onClose={() => setModal(null)}
           onSuccess={() => { void refresh(); }}
+          onSwitchToDeposit={() => setModal("deposit")}
         />
       )}
 
@@ -284,11 +266,13 @@ function PaymentModal({
   user,
   onClose,
   onSuccess,
+  onSwitchToDeposit,
 }: {
   type: "deposit" | "withdraw";
   user: AccountUser;
   onClose: () => void;
   onSuccess: () => void;
+  onSwitchToDeposit?: () => void;
 }) {
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState(user.phone ?? "");
@@ -484,6 +468,22 @@ function PaymentModal({
               className="w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px] disabled:opacity-50"
             >
               ← Start over
+            </button>
+          </div>
+        ) : type === "withdraw" && (user.balance ?? 0) <= 0 ? (
+          <div className="p-5 flex flex-col items-center text-center gap-3 py-8">
+            <div className="grid place-items-center w-14 h-14 rounded-2xl bg-[var(--color-surface-2)] border border-[var(--color-line)]">
+              <ArrowDownToLine size={24} className="text-[var(--color-ink-faint)]" />
+            </div>
+            <h4 className="font-display font-bold text-[15px]">No funds to withdraw</h4>
+            <p className="text-[12.5px] text-[var(--color-ink-dim)] max-w-[280px]">
+              Your balance is {money(user.balance ?? 0)}. Make a deposit first, then you can withdraw your winnings.
+            </p>
+            <button
+              onClick={() => onSwitchToDeposit?.()}
+              className="mt-1 w-full rounded-xl py-3 font-display font-extrabold text-[14px] grad-violet-pink text-white active:scale-[.99] transition"
+            >
+              Deposit now
             </button>
           </div>
         ) : (

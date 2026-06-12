@@ -6,27 +6,32 @@ import { Shield, ArrowRight, Lock, Zap, ShieldCheck, Check, X, RotateCcw } from 
 import { Brand } from "@/components/brand";
 import { cn, cedis } from "@/lib/utils";
 
+type LegResult = "won" | "lost" | "pending";
+
 type Result = {
   code: string;
-  status: "won" | "pending";
+  status: LegResult;
   stake: number;
   odds: number;
   payout: number;
-  legs: { match: string; pick: string; odds: number; result: "won" | "pending" }[];
+  legs: { match: string; pick: string; odds: number; result: LegResult }[];
 };
 
-const SAMPLE: Result = {
-  code: "NW-7F2A91",
-  status: "pending",
-  stake: 50,
-  odds: 12.4,
-  payout: 620,
-  legs: [
-    { match: "Arsenal v Real Madrid", pick: "Arsenal", odds: 2.1, result: "pending" },
-    { match: "Man City v Liverpool", pick: "Over 2.5", odds: 1.85, result: "won" },
-    { match: "PSG v Marseille", pick: "PSG", odds: 1.45, result: "pending" },
-    { match: "Bayern v Dortmund", pick: "BTTS", odds: 1.7, result: "won" },
-  ],
+// Shape returned by GET /api/bets?code=<code>
+type ApiSelection = {
+  outcomeLabel?: string;
+  odds?: number;
+  status?: LegResult;
+  match?: { homeTeam?: string; awayTeam?: string };
+};
+type ApiBet = {
+  code: string;
+  status: LegResult;
+  stake: number;
+  totalOdds: number;
+  potentialWin: number;
+  payout?: number;
+  selections?: ApiSelection[];
 };
 
 export default function VerifyPage() {
@@ -35,17 +40,48 @@ export default function VerifyPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
 
-  function verify() {
-    if (code.trim().length < 4) {
+  async function verify() {
+    const clean = code.trim();
+    if (clean.length < 4) {
       setError("Enter a valid verification code.");
       return;
     }
     setError("");
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch(`/api/bets?code=${encodeURIComponent(clean)}`);
+      if (res.status === 404) {
+        setError("No ticket found with that code. Check and try again.");
+        return;
+      }
+      if (!res.ok) {
+        setError("Couldn't verify right now — please try again.");
+        return;
+      }
+      const data = (await res.json()) as { bet?: ApiBet };
+      const bet = data.bet;
+      if (!bet) {
+        setError("No ticket found with that code. Check and try again.");
+        return;
+      }
+      setResult({
+        code: bet.code,
+        status: bet.status,
+        stake: bet.stake,
+        odds: bet.totalOdds,
+        payout: bet.payout ?? bet.potentialWin,
+        legs: (bet.selections ?? []).map((s) => ({
+          match: [s.match?.homeTeam, s.match?.awayTeam].filter(Boolean).join(" v ") || "Match",
+          pick: s.outcomeLabel || "Selection",
+          odds: Number(s.odds) || 0,
+          result: s.status ?? "pending",
+        })),
+      });
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
       setLoading(false);
-      setResult({ ...SAMPLE, code: code.toUpperCase() });
-    }, 1100);
+    }
   }
 
   return (
@@ -104,10 +140,6 @@ export default function VerifyPage() {
 
               {error && <p className="text-[12px] text-[var(--color-rose)] mt-2.5 flex items-center justify-center gap-1.5"><X size={13} /> {error}</p>}
 
-              <button onClick={() => setCode("NW-7F2A91")} className="text-[11px] text-[var(--color-ink-faint)] mt-3 hover:text-[var(--color-cyan)] transition">
-                Try sample code → NW-7F2A91
-              </button>
-
               <div className="grid grid-cols-3 gap-2 mt-7 pt-6 border-t border-[var(--color-line)]">
                 <Feature icon={<ShieldCheck size={18} />} title="Authentic" sub="Genuine ticket" />
                 <Feature icon={<Zap size={18} />} title="Instant" sub="Real-time" />
@@ -148,8 +180,13 @@ function ResultCard({ r, onReset }: { r: Result; onReset: () => void }) {
               <div className="num text-[11px] text-[var(--color-cyan)]">{r.code}</div>
             </div>
           </div>
-          <span className="chip px-2.5 py-1 bg-[var(--color-amber)]/12 border-[var(--color-amber)]/30 text-[var(--color-amber)]">
-            {r.status === "pending" ? "⏳ In Progress" : "🏆 Won"}
+          <span className={cn(
+            "chip px-2.5 py-1",
+            r.status === "won" && "bg-[var(--color-emerald)]/12 border-[var(--color-emerald)]/30 text-[var(--color-emerald)]",
+            r.status === "lost" && "bg-[var(--color-rose)]/12 border-[var(--color-rose)]/30 text-[var(--color-rose)]",
+            r.status === "pending" && "bg-[var(--color-amber)]/12 border-[var(--color-amber)]/30 text-[var(--color-amber)]",
+          )}>
+            {r.status === "won" ? "🏆 Won" : r.status === "lost" ? "❌ Lost" : "⏳ In Progress"}
           </span>
         </div>
 
@@ -166,8 +203,13 @@ function ResultCard({ r, onReset }: { r: Result; onReset: () => void }) {
           </div>
           {r.legs.map((l, i) => (
             <div key={i} className="flex items-center gap-3 card p-3">
-              <span className={cn("grid place-items-center w-7 h-7 rounded-lg shrink-0", l.result === "won" ? "bg-[var(--color-emerald)]/12 text-[var(--color-emerald)]" : "bg-[var(--color-amber)]/12 text-[var(--color-amber)]")}>
-                {l.result === "won" ? <Check size={15} /> : <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
+              <span className={cn(
+                "grid place-items-center w-7 h-7 rounded-lg shrink-0",
+                l.result === "won" && "bg-[var(--color-emerald)]/12 text-[var(--color-emerald)]",
+                l.result === "lost" && "bg-[var(--color-rose)]/12 text-[var(--color-rose)]",
+                l.result === "pending" && "bg-[var(--color-amber)]/12 text-[var(--color-amber)]",
+              )}>
+                {l.result === "won" ? <Check size={15} /> : l.result === "lost" ? <X size={15} /> : <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="font-display font-semibold text-[12.5px] truncate">{l.pick}</div>
