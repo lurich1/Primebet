@@ -140,6 +140,19 @@ export async function findPaymentById(id: string): Promise<PaymentRecord | null>
   return data ? rowToRecord(data as PaymentRow) : null
 }
 
+/**
+ * Hard-delete a payment row. Used by the admin "delete deposit" action after
+ * any wallet reversal has been applied. Returns true if a row was removed.
+ */
+export async function deletePayment(id: string): Promise<boolean> {
+  const { error, count } = await supabaseServer()
+    .from('payments')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+  if (error) throw new Error(`payments.delete: ${error.message}`)
+  return (count ?? 0) > 0
+}
+
 export async function findPaymentByReference(
   reference: string,
 ): Promise<PaymentRecord | null> {

@@ -11,6 +11,7 @@ import {
   Receipt,
   Check,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,7 @@ export default function AdminDepositsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = async () => {
     setError(null)
@@ -164,6 +166,30 @@ export default function AdminDepositsPage() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setResolvingId(null)
+    }
+  }
+
+  const deletePaymentRow = async (d: DepositRow) => {
+    const reverses =
+      d.type === 'deposit' && d.status === 'success' && d.user
+    const who = d.user?.name ?? 'this user'
+    const money = `${d.currency} ${formatMoney(d.amount, d.currency)}`
+    const msg = reverses
+      ? `Delete this deposit AND take ${money} back off ${who}'s balance?\n\nThis removes the record from the database and reverses the money. It cannot be undone.`
+      : `Delete this ${d.type} record from the database?\n\nThis row never credited a wallet, so no balance changes. It cannot be undone.`
+    if (!confirm(msg)) return
+
+    setDeletingId(d.id)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${d.id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -455,26 +481,46 @@ export default function AdminDepositsPage() {
                           {d.currency} {formatMoney(d.amount, d.currency)}
                         </p>
                       </div>
-                      {canResolve && (
+                      <div className="flex items-center gap-2">
+                        {canResolve && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              resolvePayment(d.id, d.user!.name, d.amount, d.currency)
+                            }
+                            disabled={resolvingId === d.id}
+                            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                            title="Credit user this amount and mark this Moolre attempt as resolved"
+                          >
+                            {resolvingId === d.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="w-3 h-3 mr-1" />
+                                Credit &amp; resolve
+                              </>
+                            )}
+                          </Button>
+                        )}
                         <Button
                           size="sm"
-                          onClick={() =>
-                            resolvePayment(d.id, d.user!.name, d.amount, d.currency)
+                          variant="outline"
+                          onClick={() => deletePaymentRow(d)}
+                          disabled={deletingId === d.id}
+                          className="h-8 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+                          title={
+                            d.type === 'deposit' && d.status === 'success'
+                              ? 'Delete this deposit and reverse the money from the balance'
+                              : 'Delete this record from the database'
                           }
-                          disabled={resolvingId === d.id}
-                          className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                          title="Credit user this amount and mark this Moolre attempt as resolved"
                         >
-                          {resolvingId === d.id ? (
+                          {deletingId === d.id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
-                            <>
-                              <Check className="w-3 h-3 mr-1" />
-                              Credit &amp; resolve
-                            </>
+                            <Trash2 className="w-3 h-3" />
                           )}
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </li>

@@ -177,6 +177,30 @@ export async function recordDeposit(
   return { user: rowToUser(data), isFirst }
 }
 
+/**
+ * Reverse a credited deposit: subtract the amount back off the user's balance
+ * and lifetime total. Used when an admin deletes a deposit that was a mistake
+ * or never actually paid. Clamped at zero so a balance the user already spent
+ * down can't go negative.
+ */
+export async function reverseDeposit(
+  userId: string,
+  amount: number,
+): Promise<AppUser | null> {
+  const current = await findUserById(userId)
+  if (!current) return null
+  const newBalance = +Math.max(0, (current.balance ?? 0) - amount).toFixed(2)
+  const newTotal = +Math.max(0, (current.totalDeposited ?? 0) - amount).toFixed(2)
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ balance: newBalance, total_deposited: newTotal })
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.reverseDeposit: ${error.message}`)
+  return rowToUser(data)
+}
+
 export async function recordWithdrawal(
   userId: string,
   amount: number,
