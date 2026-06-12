@@ -126,6 +126,7 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     homeLogo: api.homeFlagUrl,
     awayLogo: api.awayFlagUrl,
     kickoff,
+    startTimeISO: api.startTimeISO,
     live,
     minute,
     halfTime: live ? isHalfTime(api) : false,

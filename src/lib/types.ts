@@ -26,6 +26,7 @@ export type Match = {
   homeLogo?: string; // real crest URL from the feed; falls back to initials badge
   awayLogo?: string;
   kickoff: string; // ISO-ish display string
+  startTimeISO?: string; // full ISO kickoff timestamp, for the live second-clock
   live: boolean;
   minute?: number;
   halfTime?: boolean; // live match currently in the half-time break (show "HT")

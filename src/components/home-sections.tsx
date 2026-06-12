@@ -7,6 +7,7 @@ import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
 import { useMatches } from "@/lib/use-matches";
 import { TeamBadge, CountryFlag } from "./brand";
+import { LiveClock } from "./live-clock";
 import { cn } from "@/lib/utils";
 
 const TONE: Record<string, string> = {
@@ -91,7 +92,7 @@ export function FeaturedMatch({ m }: { m: Match }) {
             <span className="chip px-2.5 py-1 grad-gold text-black font-bold border-transparent">⭐ FEATURED</span>
             {m.live && (
               <span className="flex items-center gap-1.5 chip px-2.5 py-1 bg-[var(--color-rose)]/12 border-[var(--color-rose)]/30 text-[var(--color-rose)]">
-                <span className="live-dot" /> LIVE {m.halfTime ? "HT" : `${m.minute ?? 0}'`}
+                <span className="live-dot" /> LIVE <LiveClock startTimeISO={m.startTimeISO} sport={m.sport} fallbackMinute={m.minute} />
               </span>
             )}
             {!m.live && m.locked && (
@@ -116,7 +117,7 @@ export function FeaturedMatch({ m }: { m: Match }) {
                   <div className="num text-[34px] font-extrabold leading-none tracking-tight">
                     {m.scoreHome ?? 0}<span className="text-[var(--color-ink-faint)] mx-1.5">:</span>{m.scoreAway ?? 0}
                   </div>
-                  <span className="num text-[10px] text-[var(--color-rose)] font-bold mt-1.5">{m.halfTime ? "HT" : `${m.minute ?? 0}'`}</span>
+                  <LiveClock startTimeISO={m.startTimeISO} sport={m.sport} fallbackMinute={m.minute} className="num text-[10px] text-[var(--color-rose)] font-bold mt-1.5" />
                 </>
               ) : (
                 <>

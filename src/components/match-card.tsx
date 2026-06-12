@@ -5,6 +5,7 @@ import { ChevronRight, BarChart3, Lock } from "lucide-react";
 import type { Match } from "@/lib/types";
 import { useSlip } from "@/lib/store";
 import { TeamBadge, CountryFlag } from "./brand";
+import { LiveClock } from "./live-clock";
 
 const PICK_LABEL: Record<string, (m: Match) => string> = {
   "1": (m) => m.home,
@@ -57,7 +58,7 @@ export function MatchCard({ m }: { m: Match }) {
           {m.live ? (
             <span className="flex items-center gap-1.5 rounded-full px-2 py-0.5 bg-[var(--color-rose)]/12 border border-[var(--color-rose)]/30 text-[var(--color-rose)]">
               <span className="live-dot" />
-              <span className="num text-[10px] font-bold">{m.halfTime ? "HT" : `${m.minute ?? 0}'`}</span>
+              <LiveClock startTimeISO={m.startTimeISO} sport={m.sport} fallbackMinute={m.minute} className="num text-[10px] font-bold" />
             </span>
           ) : m.locked ? (
             <span className="flex items-center gap-1 rounded-full px-2 py-0.5 bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-ink-faint)]">

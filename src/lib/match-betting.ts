@@ -143,6 +143,58 @@ export function liveMinuteFromKickoff(match: Match, now: Date = new Date()): num
   return Math.min(Math.floor(elapsed), regulation)
 }
 
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`
+}
+
+/** "M:SS" from a total second count, e.g. 4880 → "81:20". */
+function clockFromSeconds(totalSec: number): string {
+  const m = Math.floor(totalSec / 60)
+  const s = Math.floor(totalSec % 60)
+  return `${m}:${pad2(s)}`
+}
+
+export interface LiveClock {
+  /** Display label: "81:20", "HT", "FT", or "" when not live/unknown. */
+  label: string
+  /** True while the match should be shown as live. */
+  live: boolean
+}
+
+/**
+ * A real-time, second-ticking match clock derived from the kickoff timestamp —
+ * the data feed only gives whole minutes, so seconds come from wall-clock here.
+ * Football mirrors a real match (0:00→45:00, "HT" for the 15-min break,
+ * 45:00→90:00); other sports count up to their regulation length. Call this
+ * every second from a client component to animate the clock.
+ */
+export function liveClockLabel(
+  startTimeISO: string | undefined,
+  sport: string | undefined,
+  now: Date = new Date(),
+): LiveClock {
+  if (!startTimeISO) return { label: '', live: false }
+  const k = Date.parse(startTimeISO)
+  if (Number.isNaN(k)) return { label: '', live: false }
+  const elapsedSec = (now.getTime() - k) / 1000
+  if (elapsedSec < 0) return { label: '', live: false }
+
+  const football = (sport ?? 'football').toLowerCase() === 'football'
+  if (!football) {
+    const reg = REGULATION_MINUTES[(sport ?? '').toLowerCase()] ?? 90
+    if (elapsedSec > LIVE_WINDOW_MINUTES * 60) return { label: 'FT', live: false }
+    return { label: clockFromSeconds(Math.min(elapsedSec, reg * 60)), live: true }
+  }
+
+  const firstHalfSec = FIRST_HALF_MIN * 60
+  const breakSec = HALF_TIME_BREAK_MIN * 60
+  const fullWallSec = FOOTBALL_FULL_WALL * 60
+  if (elapsedSec < firstHalfSec) return { label: clockFromSeconds(elapsedSec), live: true } // 0:00→44:59
+  if (elapsedSec < firstHalfSec + breakSec) return { label: 'HT', live: true } // half-time break
+  if (elapsedSec < fullWallSec) return { label: clockFromSeconds(elapsedSec - breakSec), live: true } // 45:00→89:59
+  return { label: 'FT', live: false }
+}
+
 /**
  * Whether a derived-live football match is currently in its half-time break
  * (clock held at 45'). Lets the UI show "HT" instead of a frozen 45'.

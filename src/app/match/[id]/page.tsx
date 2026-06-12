@@ -9,6 +9,7 @@ import type { Match as UiMatch } from "@/lib/types";
 import { apiMatchToUi, buildMarketGroupsFromApi } from "@/lib/match-adapter";
 import { useSlip } from "@/lib/store";
 import { TeamBadge, CountryFlag } from "@/components/brand";
+import { LiveClock } from "@/components/live-clock";
 import { cn } from "@/lib/utils";
 
 const TABS = ["All", "Main", "Goals", "Halves", "Players", "Specials"];
@@ -109,7 +110,8 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
                     {m.scoreHome}<span className="text-[var(--color-ink-faint)] mx-2">:</span>{m.scoreAway}
                   </div>
                   <span className="flex items-center gap-1.5 mt-2 num text-[11px] text-[var(--color-rose)] font-bold">
-                    <span className="live-dot" /> {m.halfTime ? "HT" : `${m.minute ?? 0}'`}
+                    <span className="live-dot" />{" "}
+                    <LiveClock startTimeISO={m.startTimeISO} sport={m.sport} fallbackMinute={m.minute} />
                   </span>
                 </>
               ) : (
