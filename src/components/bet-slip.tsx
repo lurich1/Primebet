@@ -2,21 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn } from "lucide-react";
+import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn, BookmarkPlus, Copy, Check } from "lucide-react";
 import { useSlip, totalOdds } from "@/lib/store";
+import type { Selection } from "@/lib/types";
 import { getUserId } from "@/lib/user-session";
 import { cn, cedis } from "@/lib/utils";
 
 const QUICK = [20, 50, 100, 500];
 
 function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
-  const { selections, stake, remove, clear, setStake } = useSlip();
+  const { selections, stake, remove, clear, setStake, add } = useSlip();
   const router = useRouter();
   const [placed, setPlaced] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  // Booking: save the slip and hand back a shareable code (no stake, no login).
+  const [booking, setBooking] = useState(false);
+  const [bookedCode, setBookedCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Loading a booking code back into the slip.
+  const [loadCode, setLoadCode] = useState("");
+  const [loadingCode, setLoadingCode] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const odds = totalOdds(selections);
   const potential = stake * odds;
   const bonusPct = selections.length >= 5 ? 0.15 : selections.length >= 3 ? 0.08 : 0;
@@ -87,6 +96,73 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
     }
   }
 
+  // Book the slip → get a shareable code. No money, no account needed.
+  async function book() {
+    if (selections.length === 0 || booking) return;
+    setError(null);
+    setBooking(true);
+    try {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selections }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Could not book this slip. Please try again.");
+        return;
+      }
+      setBookedCode(data.booking?.code ?? null);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  function copyCode() {
+    if (!bookedCode) return;
+    navigator.clipboard?.writeText(bookedCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }).catch(() => {});
+  }
+
+  // Load a booking code → drop its selections back into the slip.
+  async function loadBookingCode() {
+    const clean = loadCode.trim();
+    if (clean.length < 4 || loadingCode) {
+      setLoadError("Enter a valid booking code.");
+      return;
+    }
+    setLoadError(null);
+    setLoadingCode(true);
+    try {
+      const res = await fetch(`/api/bookings?code=${encodeURIComponent(clean)}`);
+      if (res.status === 404) {
+        setLoadError("No booking found with that code.");
+        return;
+      }
+      if (!res.ok) {
+        setLoadError("Couldn't load that code — please try again.");
+        return;
+      }
+      const data = await res.json();
+      const sels: Selection[] = data.booking?.selections ?? [];
+      if (sels.length === 0) {
+        setLoadError("That booking has no selections.");
+        return;
+      }
+      clear();
+      sels.forEach((s) => add(s));
+      setLoadCode("");
+    } catch {
+      setLoadError("Network error — please try again.");
+    } finally {
+      setLoadingCode(false);
+    }
+  }
+
   if (needsLogin) {
     return (
       <div className="flex flex-col items-center text-center px-5 py-10 animate-rise">
@@ -105,6 +181,41 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
         </button>
         <button
           onClick={() => setNeedsLogin(false)}
+          className="mt-2 w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px]"
+        >
+          Back to slip
+        </button>
+      </div>
+    );
+  }
+
+  if (bookedCode) {
+    return (
+      <div className="flex flex-col items-center text-center px-5 py-10 animate-rise">
+        <div className="grid place-items-center w-16 h-16 rounded-full grad-violet-pink mb-4 shadow-[0_10px_40px_-8px_rgba(236,72,153,.6)]">
+          <BookmarkPlus className="text-white" size={28} />
+        </div>
+        <h3 className="font-display font-extrabold text-lg">Slip Booked!</h3>
+        <p className="text-[13px] text-[var(--color-ink-dim)] mt-1">
+          Share this code or load it later to place the bet.
+        </p>
+        <button
+          onClick={copyCode}
+          className="mt-4 w-full flex items-center justify-between gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3.5 hover:border-[var(--color-violet)]/60 transition group"
+        >
+          <span className="num text-[22px] font-extrabold tracking-[0.2em] grad-text">{bookedCode}</span>
+          <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-dim)] group-hover:text-white">
+            {copied ? <><Check size={15} className="text-[var(--color-emerald)]" /> Copied</> : <><Copy size={15} /> Copy</>}
+          </span>
+        </button>
+        <button
+          onClick={() => { setBookedCode(null); clear(); onPlaced?.(); }}
+          className="mt-4 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm"
+        >
+          Done
+        </button>
+        <button
+          onClick={() => setBookedCode(null)}
           className="mt-2 w-full rounded-xl py-2.5 font-display font-semibold text-[var(--color-ink-dim)] hover:text-white text-[13px]"
         >
           Back to slip
@@ -143,6 +254,28 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
         <p className="text-[12.5px] text-[var(--color-ink-faint)] mt-1.5 leading-relaxed">
           Tap any odds to add a selection. Combine picks to build an accumulator.
         </p>
+
+        {/* Load a booking code */}
+        <div className="w-full mt-6 pt-5 border-t border-[var(--color-line)]">
+          <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-faint)] mb-2">Have a booking code?</p>
+          <div className="flex gap-2">
+            <input
+              value={loadCode}
+              onChange={(e) => { setLoadCode(e.target.value.toUpperCase()); setLoadError(null); }}
+              onKeyDown={(e) => e.key === "Enter" && loadBookingCode()}
+              placeholder="Enter code"
+              className="flex-1 num text-[13px] tracking-widest bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-3 py-2.5 outline-none focus:border-[var(--color-violet)]/60 transition placeholder:tracking-normal placeholder:font-sans placeholder:text-[var(--color-ink-faint)]"
+            />
+            <button
+              onClick={loadBookingCode}
+              disabled={loadingCode}
+              className="rounded-xl px-4 grad-violet-pink text-white font-display font-bold text-[13px] disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {loadingCode ? <Loader2 size={15} className="animate-spin" /> : "Load"}
+            </button>
+          </div>
+          {loadError && <p className="text-[11.5px] text-[var(--color-rose)] mt-2">{loadError}</p>}
+        </div>
       </div>
     );
   }
@@ -224,11 +357,20 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
 
         <button
           onClick={placeBet}
-          disabled={stake <= 0 || busy}
+          disabled={stake <= 0 || busy || booking}
           className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white shadow-[0_10px_30px_-8px_rgba(236,72,153,.5)] disabled:opacity-50 disabled:shadow-none active:scale-[.99] transition"
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
           {busy ? "Placing…" : `Place Bet · ${cedis(stake)}`}
+        </button>
+
+        <button
+          onClick={book}
+          disabled={booking || busy}
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-display font-bold text-[13px] border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-dim)] hover:text-white hover:border-[var(--color-violet)]/60 disabled:opacity-50 active:scale-[.99] transition"
+        >
+          {booking ? <Loader2 size={15} className="animate-spin" /> : <BookmarkPlus size={15} />}
+          {booking ? "Booking…" : "Book a Bet — get a code"}
         </button>
       </div>
     </div>
