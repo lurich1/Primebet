@@ -20,6 +20,7 @@ interface AccountUser {
   verificationStep: number;
   withdrawalApproved: boolean;
   phone: string | null;
+  firstDepositAt?: string | null;
 }
 
 // Mobile-money networks. Moolre's channel auto-detects the network from the
@@ -135,9 +136,18 @@ export default function AccountPage() {
                 </div>
               </div>
             </div>
-            <div className="sm:ml-auto sm:text-right">
-              <div className="text-[11px] text-[var(--color-ink-dim)]">Available Balance</div>
-              <div className="num text-[30px] font-extrabold grad-text leading-tight">{money(user?.balance ?? 0)}</div>
+            <div className="sm:ml-auto flex items-center gap-3 sm:justify-end">
+              <div className="sm:text-right">
+                <div className="text-[11px] text-[var(--color-ink-dim)]">Available Balance</div>
+                <div className="num text-[30px] font-extrabold grad-text leading-tight">{money(user?.balance ?? 0)}</div>
+              </div>
+              {user?.firstDepositAt && (
+                <div className="shrink-0 rounded-2xl px-3.5 py-2.5 text-center border border-[var(--color-amber)]/35 bg-[var(--color-amber)]/10">
+                  <div className="text-[15px] leading-none">🎁</div>
+                  <div className="num text-[15px] font-extrabold text-[var(--color-amber)] mt-1 leading-none">{money(100)}</div>
+                  <div className="text-[9px] uppercase tracking-wide text-[var(--color-ink-dim)] mt-1">Bonus</div>
+                </div>
+              )}
             </div>
           </div>
 

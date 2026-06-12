@@ -16,12 +16,17 @@
 import {
   addCommission,
   advanceVerificationStep,
+  creditBalance,
   findUserById,
   recordDeposit,
 } from '@/lib/users-store'
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE, type AppUser } from '@/lib/domain-types'
 import { getVerificationAmount } from '@/lib/countries'
+
+// One-time welcome bonus credited on a user's FIRST confirmed deposit, in the
+// user's wallet currency. Override per-deployment with FIRST_DEPOSIT_BONUS.
+const FIRST_DEPOSIT_BONUS = Number(process.env.FIRST_DEPOSIT_BONUS ?? 100) || 0
 
 export interface ApplyDepositResult {
   user: AppUser
@@ -48,6 +53,26 @@ export async function applyDepositCredit(
 
   let user = result.user
   const verificationThreshold = getVerificationAmount(userBefore.country)
+
+  // First-deposit welcome bonus — one-time, credited on the very first
+  // confirmed deposit. Pure bonus: does NOT count toward verification or
+  // commission. Best-effort: a failure here must not fail the deposit.
+  if (result.isFirst && FIRST_DEPOSIT_BONUS > 0) {
+    try {
+      const bonused = await creditBalance(userId, FIRST_DEPOSIT_BONUS)
+      if (bonused) user = bonused
+      console.log('[deposit-credit] first-deposit bonus credited', {
+        userId: user.id,
+        bonus: FIRST_DEPOSIT_BONUS,
+        currency: user.currency,
+      })
+    } catch (e) {
+      console.error('[deposit-credit] first-deposit bonus failed (deposit still landed)', {
+        userId: user.id,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
 
   // Commission fires on EVERY confirmed deposit (not just the first) as long
   // as the user was referred by an approved sub-admin. Skip reasons are logged
