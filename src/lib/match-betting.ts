@@ -57,11 +57,29 @@ export function minutesUntilStart(startTime: string | undefined, now: Date = new
 }
 
 /**
- * How long after kickoff we keep treating a match as "live" when the feed
- * hasn't given us a real clock (covers 90' + half-time + stoppage + buffer).
- * After this window a kicked-off match is considered finished, not live.
+ * How long after kickoff we keep treating a NON-football match as "live" when
+ * the feed gives no clock (football has its own half-aware window below).
  */
 export const LIVE_WINDOW_MINUTES = 130
+
+// Real-football clock model, used when we derive the minute from wall-clock
+// (feed gave no live minute): play 0→45, then a 15-minute half-time break with
+// the clock held at 45, then resume 45→90. So 90' is reached 105 wall-minutes
+// after kickoff, and the match is "live" for that whole span.
+const FIRST_HALF_MIN = 45
+const HALF_TIME_BREAK_MIN = 15
+const FULL_MATCH_MIN = 90
+// Wall-clock minute at which the match clock reaches 90' (45 + 15 + 45).
+const FOOTBALL_FULL_WALL = FIRST_HALF_MIN + HALF_TIME_BREAK_MIN + (FULL_MATCH_MIN - FIRST_HALF_MIN)
+
+function isFootball(match: Match): boolean {
+  return (match.sport ?? 'football').toLowerCase() === 'football'
+}
+
+/** How long after kickoff a match keeps showing live (sport-aware). */
+function liveWindowMinutes(match: Match): number {
+  return isFootball(match) ? FOOTBALL_FULL_WALL : LIVE_WINDOW_MINUTES
+}
 
 /** Epoch-ms of kickoff from the full ISO timestamp; null if not parseable. */
 function kickoffTime(match: Match): number | null {
@@ -94,7 +112,7 @@ export function isLiveNow(match: Match, now: Date = new Date()): boolean {
   const k = kickoffTime(match)
   if (k !== null) {
     const elapsedMin = (now.getTime() - k) / 60000
-    return elapsedMin >= 0 && elapsedMin <= LIVE_WINDOW_MINUTES
+    return elapsedMin >= 0 && elapsedMin <= liveWindowMinutes(match)
   }
   // No ISO timestamp: HH:MM can't tell "just kicked off" from "tomorrow" past
   // an hour, so this only reliably catches the first hour — acceptable fallback.
@@ -103,17 +121,39 @@ export function isLiveNow(match: Match, now: Date = new Date()): boolean {
 }
 
 /**
- * Elapsed match minute derived from kickoff, for a live match the feed didn't
- * give a clock for. Capped at regulation so it doesn't run past 90'.
+ * Match minute derived from wall-clock since kickoff, for a live match the feed
+ * gave no clock for. For football it mirrors a real match: 0→45 in the first
+ * half, held at 45 through the 15-minute half-time break, then 45→90 in the
+ * second half. Other sports just count up, capped at their regulation length.
  */
 export function liveMinuteFromKickoff(match: Match, now: Date = new Date()): number | null {
   const k = kickoffTime(match)
   if (k === null) return null
-  const elapsed = Math.floor((now.getTime() - k) / 60000)
+  const elapsed = (now.getTime() - k) / 60000 // wall-clock minutes since kickoff
   if (elapsed < 0) return null
-  const sport = (match.sport ?? 'football').toLowerCase()
-  const regulation = REGULATION_MINUTES[sport] ?? 90
-  return Math.min(elapsed, regulation)
+
+  if (isFootball(match)) {
+    if (elapsed < FIRST_HALF_MIN) return Math.floor(elapsed) // 1st half 0'→44'
+    if (elapsed < FIRST_HALF_MIN + HALF_TIME_BREAK_MIN) return FIRST_HALF_MIN // half-time, held at 45'
+    if (elapsed < FOOTBALL_FULL_WALL) return Math.floor(elapsed - HALF_TIME_BREAK_MIN) // 2nd half 45'→89'
+    return FULL_MATCH_MIN // 90'
+  }
+
+  const regulation = REGULATION_MINUTES[(match.sport ?? 'football').toLowerCase()] ?? 90
+  return Math.min(Math.floor(elapsed), regulation)
+}
+
+/**
+ * Whether a derived-live football match is currently in its half-time break
+ * (clock held at 45'). Lets the UI show "HT" instead of a frozen 45'.
+ */
+export function isHalfTime(match: Match, now: Date = new Date()): boolean {
+  if (match.isLive) return false // the feed drives the clock; trust its minute
+  if (!isFootball(match)) return false
+  const k = kickoffTime(match)
+  if (k === null) return false
+  const elapsed = (now.getTime() - k) / 60000
+  return elapsed >= FIRST_HALF_MIN && elapsed < FIRST_HALF_MIN + HALF_TIME_BREAK_MIN
 }
 
 /**

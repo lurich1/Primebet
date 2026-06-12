@@ -7,7 +7,7 @@
 import type { Match as ApiMatch, MarketBook } from '@/lib/domain-types'
 import type { Match as UiMatch, Market } from '@/lib/types'
 import { getCountryFlag } from '@/lib/country-flags'
-import { getBettingState, isLiveNow, liveMinuteFromKickoff } from '@/lib/match-betting'
+import { getBettingState, isLiveNow, liveMinuteFromKickoff, isHalfTime } from '@/lib/match-betting'
 
 // Short, user-facing label for why betting is closed on a match.
 const LOCK_LABEL: Record<string, string> = {
@@ -128,6 +128,7 @@ export function apiMatchToUi(api: ApiMatch): UiMatch {
     kickoff,
     live,
     minute,
+    halfTime: live ? isHalfTime(api) : false,
     scoreHome: api.homeScore,
     scoreAway: api.awayScore,
     markets: ONE_X_TWO(api.odds),

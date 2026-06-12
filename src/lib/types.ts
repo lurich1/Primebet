@@ -28,6 +28,7 @@ export type Match = {
   kickoff: string; // ISO-ish display string
   live: boolean;
   minute?: number;
+  halfTime?: boolean; // live match currently in the half-time break (show "HT")
   scoreHome?: number;
   scoreAway?: number;
   markets: Market[]; // 1 X 2

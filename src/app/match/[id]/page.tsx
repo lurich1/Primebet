@@ -109,7 +109,7 @@ export default function MatchDetail({ params }: { params: Promise<{ id: string }
                     {m.scoreHome}<span className="text-[var(--color-ink-faint)] mx-2">:</span>{m.scoreAway}
                   </div>
                   <span className="flex items-center gap-1.5 mt-2 num text-[11px] text-[var(--color-rose)] font-bold">
-                    <span className="live-dot" /> {m.minute}&apos;
+                    <span className="live-dot" /> {m.halfTime ? "HT" : `${m.minute ?? 0}'`}
                   </span>
                 </>
               ) : (
