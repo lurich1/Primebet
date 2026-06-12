@@ -139,6 +139,15 @@ export default function RegisterPage() {
           </div>
         </Field>
 
+        <Field label="Referral code (optional)">
+          <input
+            value={referral}
+            onChange={(e) => setReferral(e.target.value.toUpperCase())}
+            placeholder="Partner code"
+            className={inputCls + " font-mono tracking-widest"}
+          />
+        </Field>
+
         {error && (
           <p className="mb-2 text-[12.5px] font-semibold text-[var(--color-rose,#fb7185)]">{error}</p>
         )}

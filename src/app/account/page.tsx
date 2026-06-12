@@ -193,6 +193,25 @@ export default function AccountPage() {
         </div>
       </div>
 
+      {/* partner program */}
+      <div className="card p-4 mt-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="grid place-items-center w-9 h-9 rounded-xl bg-[var(--color-amber)]/12 shrink-0 text-[16px]">🤝</span>
+            <div className="min-w-0">
+              <div className="font-display font-bold text-[13.5px]">Partner Program</div>
+              <div className="text-[11.5px] text-[var(--color-ink-dim)] truncate">Earn 70% commission on referrals you bring in.</div>
+            </div>
+          </div>
+          <Link
+            href="/sub-admin/register"
+            className="shrink-0 rounded-xl px-4 py-2 text-[12.5px] font-bold grad-violet-pink text-white hover:brightness-110 transition"
+          >
+            Become a partner
+          </Link>
+        </div>
+      </div>
+
       {modal && user && (
         <PaymentModal
           type={modal}
