@@ -8,6 +8,7 @@ import {
   Trophy,
   PlusSquare,
   UserCheck,
+  Users2,
   Wallet,
   Settings,
   LogOut,
@@ -23,6 +24,7 @@ const NAV = [
   { href: '/admin/custom-matches', label: 'Custom games', icon: PlusSquare },
   { href: '/admin/deposits', label: 'Payments', icon: Wallet },
   { href: '/admin/users', label: 'Players', icon: UserCheck },
+  { href: '/admin/sub-admins', label: 'Partners', icon: Users2 },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

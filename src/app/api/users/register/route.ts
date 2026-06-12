@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { addUser, findUserByEmail } from '@/lib/users-store'
+import { findSubAdminByReferralCode } from '@/lib/sub-admins-store'
 import { hashPassword } from '@/lib/password'
 import {
   currencyFromCountry,
@@ -90,6 +91,25 @@ export async function POST(request: Request) {
     )
   }
 
+  // Optional sub-admin referral code — must match an approved sub-admin.
+  const referralCode = (body.referralCode ?? '').trim().toUpperCase()
+  let referredBySubAdminId: string | undefined = undefined
+  let validatedReferralCode: string | undefined = undefined
+  if (referralCode) {
+    const sa = await findSubAdminByReferralCode(referralCode)
+    if (!sa) {
+      return NextResponse.json({ error: 'invalid referral code' }, { status: 400 })
+    }
+    if (!sa.approved) {
+      return NextResponse.json(
+        { error: 'this referral code is currently disabled' },
+        { status: 400 },
+      )
+    }
+    referredBySubAdminId = sa.id
+    validatedReferralCode = sa.referralCode
+  }
+
   const user = await addUser({
     name,
     email,
@@ -101,8 +121,8 @@ export async function POST(request: Request) {
     // Maintain the dedicated ghanaCard column for GH users so existing admin
     // tooling that still reads `ghana_card` continues to display the value.
     ghanaCard: country === 'GH' ? (kycId ?? undefined) : undefined,
-    referredByCode: undefined,
-    referredBySubAdminId: undefined,
+    referredByCode: validatedReferralCode,
+    referredBySubAdminId,
   })
 
   return NextResponse.json(

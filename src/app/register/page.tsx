@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Check, Loader2 } from "lucide-react";
@@ -37,7 +37,14 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [referral, setReferral] = useState("");
   const router = useRouter();
+
+  // Pick up a partner referral code from /register?ref=CODE.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) setReferral(ref.trim().toUpperCase());
+  }, []);
 
   const country = COUNTRIES.find((c) => c.dial === dial) ?? COUNTRIES[0];
 
@@ -56,6 +63,7 @@ export default function RegisterPage() {
           phone: phone.trim(),
           country: country.iso,
           kyc: kyc.trim() || undefined,
+          referralCode: referral || undefined,
         }),
       });
       const data = await res.json();

@@ -131,6 +131,24 @@ export interface Commission {
 
 export const COMMISSION_RATE = 0.7 // 70% of every deposit from a referred user
 
+export interface SubAdmin {
+  id: string
+  name: string
+  email: string
+  passwordHash: string
+  referralCode: string
+  approved: boolean
+  createdAt: string
+  /** Legacy GHS-only scalar (kept for back-compat reads). */
+  commissionBalance: number
+  /** Legacy GHS-only scalar (kept for back-compat reads). */
+  totalCommissionEarned: number
+  /** Per-currency balances — authoritative. */
+  commissionBalances: Partial<Record<CurrencyCode, number>>
+  /** Per-currency lifetime totals. */
+  totalCommissionEarnedBy: Partial<Record<CurrencyCode, number>>
+}
+
 export interface PlacedBet {
   id: string
   code: string
