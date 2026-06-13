@@ -222,6 +222,41 @@ export async function updateBet(
 }
 
 /**
+ * Settle a bet ONLY if it's still pending — a Postgres-level guard (the
+ * `.eq('status','pending')` filter) so two concurrent settlers (e.g. the cron
+ * and a player opening My Bets at the same moment) can't both credit the same
+ * win. Returns the updated bet, or null when another path already settled it.
+ */
+export async function settleBetIfPending(
+  id: string,
+  patch: { status: 'won' | 'lost'; settledAt: string; payout: number },
+): Promise<PlacedBet | null> {
+  const { data, error } = await supabaseServer()
+    .from('bets')
+    .update({ status: patch.status, settled_at: patch.settledAt, payout: patch.payout })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`bets.settleIfPending: ${error.message}`)
+  if (!data) return null
+  const selectionsByBet = await loadSelectionsFor([data.id])
+  return rowToBet(data as BetRow, selectionsByBet.get(data.id) ?? [])
+}
+
+/** Set a single selection's result (per-leg colours on the bet card). */
+export async function setSelectionStatusById(
+  selectionId: string,
+  status: 'won' | 'lost' | 'pending',
+): Promise<void> {
+  const { error } = await supabaseServer()
+    .from('bet_selections')
+    .update({ status })
+    .eq('id', selectionId)
+  if (error) throw new Error(`bet_selections.setStatusById: ${error.message}`)
+}
+
+/**
  * Bulk-set the status of every selection on a bet (used when settling).
  * Pass 'won' to mark them all winners (cashout) or 'lost' to mark them all
  * losers. Per-leg control can come later.

@@ -10,6 +10,7 @@ import {
 } from '@/lib/bets-store'
 import { creditBalance, debitBalance, findUserById } from '@/lib/users-store'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
+import { settlePendingBets } from '@/lib/settle-bets'
 import type { BetSelection, PlacedBet } from '@/lib/domain-types'
 
 async function isAdminAuthenticated(): Promise<boolean> {
@@ -35,8 +36,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ bet })
   }
 
-  // A user can list THEIR OWN bets by passing their userId.
+  // A user can list THEIR OWN bets by passing their userId. Auto-settle any of
+  // their finished bets first, so wins show as won (and the wallet is credited)
+  // the moment the player opens My Bets — no admin action needed.
   if (userId) {
+    await settlePendingBets(userId).catch((e) => {
+      console.error('[bets] auto-settle failed (listing still returned):', e)
+    })
     const bets = await readBetsForUser(userId)
     return NextResponse.json({ bets })
   }
