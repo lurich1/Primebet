@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { sports } from '@/lib/mock-data'
-import type { Match } from '@/lib/domain-types'
+import type { Match, MatchGoal } from '@/lib/domain-types'
 
 interface CreateForm {
   sport: string
@@ -19,12 +19,15 @@ interface CreateForm {
   awayFlagUrl: string
   isLive: boolean
   startTime: string
+  /** datetime-local value for a scheduled kickoff (auto-start). */
+  kickoff: string
   minute: string
   homeScore: string
   awayScore: string
   oddsHome: string
   oddsDraw: string
   oddsAway: string
+  goals: MatchGoal[]
 }
 
 const blankForm: CreateForm = {
@@ -37,12 +40,14 @@ const blankForm: CreateForm = {
   awayFlagUrl: '',
   isLive: false,
   startTime: '',
+  kickoff: '',
   minute: "1'",
   homeScore: '0',
   awayScore: '0',
   oddsHome: '',
   oddsDraw: '',
   oddsAway: '',
+  goals: [],
 }
 
 export default function AdminCustomMatchesPage() {
@@ -109,13 +114,17 @@ export default function AdminCustomMatchesPage() {
         homeFlagUrl: form.homeFlagUrl || undefined,
         awayFlagUrl: form.awayFlagUrl || undefined,
         isLive: form.isLive,
+        goals: form.goals,
+        // A scheduled kickoff (datetime-local) becomes a full ISO timestamp so
+        // the match auto-starts and its clock runs from that moment.
+        startTimeISO: form.kickoff ? new Date(form.kickoff).toISOString() : undefined,
         ...(form.isLive
           ? {
               minute: form.minute,
               homeScore: Number(form.homeScore),
               awayScore: Number(form.awayScore),
             }
-          : { startTime: form.startTime }),
+          : {}),
         odds: {
           home: Number(form.oddsHome),
           draw: Number(form.oddsDraw),
@@ -328,13 +337,31 @@ export default function AdminCustomMatchesPage() {
             </>
           ) : (
             <div className="md:col-span-2">
-              <Label>Start time</Label>
+              <Label>Kickoff date &amp; time</Label>
               <Input
-                value={form.startTime}
-                onChange={(e) => update('startTime', e.target.value)}
-                placeholder="19:30"
+                type="datetime-local"
+                value={form.kickoff}
+                onChange={(e) => update('kickoff', e.target.value)}
                 className="bg-secondary"
               />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                The match goes live on its own at this time and the clock runs from 0:00.
+              </p>
+            </div>
+          )}
+
+          {/* Scripted goals — drive the live score off the clock */}
+          {!form.isLive && (
+            <div className="md:col-span-2">
+              <Label>Goal script (optional)</Label>
+              <GoalScriptEditor
+                goals={form.goals}
+                onChange={(goals) => update('goals', goals)}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                e.g. <b>20&apos; Home</b> and <b>45&apos; Away</b> — the score updates itself as
+                the clock passes each minute. Needs a kickoff time set above.
+              </p>
             </div>
           )}
 
@@ -456,6 +483,77 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
+/**
+ * Edits a scripted goal timeline: rows of (minute, scoring side). The live
+ * score is derived from this — at each goal's minute the score ticks up.
+ */
+function GoalScriptEditor({
+  goals,
+  onChange,
+  homeLabel = 'Home',
+  awayLabel = 'Away',
+}: {
+  goals: MatchGoal[]
+  onChange: (goals: MatchGoal[]) => void
+  homeLabel?: string
+  awayLabel?: string
+}) {
+  const sorted = [...goals].sort((a, b) => a.minute - b.minute)
+  const add = (team: 'home' | 'away') =>
+    onChange([...goals, { minute: 1, team }].sort((a, b) => a.minute - b.minute))
+  const setMinute = (i: number, minute: number) => {
+    const next = [...sorted]
+    next[i] = { ...next[i], minute: Math.max(0, Math.min(130, minute || 0)) }
+    onChange(next)
+  }
+  const remove = (i: number) => onChange(sorted.filter((_, idx) => idx !== i))
+
+  return (
+    <div className="space-y-2">
+      {sorted.length > 0 && (
+        <ul className="space-y-1.5">
+          {sorted.map((g, i) => (
+            <li key={i} className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                max="130"
+                value={String(g.minute)}
+                onChange={(e) => setMinute(i, Number(e.target.value))}
+                className="h-8 w-20 text-center bg-secondary"
+              />
+              <span className="text-xs text-muted-foreground">min</span>
+              <span
+                className={`flex-1 text-sm font-semibold ${
+                  g.team === 'home' ? 'text-primary' : 'text-cyan-500'
+                }`}
+              >
+                {g.team === 'home' ? homeLabel : awayLabel} scores
+              </span>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                aria-label="Remove goal"
+                className="w-7 h-7 rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 flex items-center justify-center"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => add('home')} className="h-8 text-xs gap-1">
+          <Plus className="w-3 h-3" /> {homeLabel} goal
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => add('away')} className="h-8 text-xs gap-1">
+          <Plus className="w-3 h-3" /> {awayLabel} goal
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 interface FlagPickerProps {
   label: string
   url: string
@@ -530,11 +628,33 @@ interface ExistingMatchRowProps {
  * One row in the existing-matches list. Lets the admin enter a live score,
  * toggle Live/Final state, and mark the result without opening a modal.
  */
+/** ISO timestamp → "YYYY-MM-DDTHH:MM" for a datetime-local input, in local time. */
+function isoToLocalInput(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowProps) {
   const [editing, setEditing] = useState(false)
   const [home, setHome] = useState(String(match.homeScore ?? 0))
   const [away, setAway] = useState(String(match.awayScore ?? 0))
   const [minute, setMinute] = useState(match.minute ?? "1'")
+  // Schedule + goal-script editor
+  const [sched, setSched] = useState(false)
+  const [kickoff, setKickoff] = useState(isoToLocalInput(match.startTimeISO))
+  const [goals, setGoals] = useState<MatchGoal[]>(match.goals ?? [])
+
+  const saveSchedule = () => {
+    onPatch({
+      isLive: false,
+      goals,
+      startTimeISO: kickoff ? new Date(kickoff).toISOString() : undefined,
+    })
+    setSched(false)
+  }
 
   const startEdit = () => {
     setHome(String(match.homeScore ?? 0))
@@ -673,6 +793,17 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               Set result
             </Button>
           )}
+          {!editing && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSched((v) => !v)}
+              disabled={busy}
+              className="h-8 text-xs"
+            >
+              Schedule &amp; goals
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -750,6 +881,52 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               className="h-8 text-xs bg-primary text-primary-foreground"
             >
               {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Final result'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {sched && (
+        <div className="bg-secondary/40 border border-border rounded-lg p-3 space-y-3">
+          <div>
+            <Label>Kickoff date &amp; time</Label>
+            <Input
+              type="datetime-local"
+              value={kickoff}
+              onChange={(e) => setKickoff(e.target.value)}
+              className="h-9 bg-secondary"
+              disabled={busy}
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Match auto-starts at this time; the clock runs from 0:00.
+            </p>
+          </div>
+          <div>
+            <Label>Goal script</Label>
+            <GoalScriptEditor
+              goals={goals}
+              onChange={setGoals}
+              homeLabel={match.homeTeam}
+              awayLabel={match.awayTeam}
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSched(false)}
+              disabled={busy}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveSchedule}
+              disabled={busy}
+              className="h-8 text-xs bg-primary text-primary-foreground"
+            >
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save schedule & goals'}
             </Button>
           </div>
         </div>

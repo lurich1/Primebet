@@ -143,6 +143,31 @@ export function liveMinuteFromKickoff(match: Match, now: Date = new Date()): num
   return Math.min(Math.floor(elapsed), regulation)
 }
 
+/**
+ * The integer match minute derived from a kickoff ISO timestamp, half-aware for
+ * football (held at 45 during the break, 90 once finished). Returns null before
+ * kickoff. Used to drive scripted goals off the clock.
+ */
+export function matchMinuteFromKickoff(
+  startTimeISO: string | undefined,
+  sport: string | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!startTimeISO) return null
+  const k = Date.parse(startTimeISO)
+  if (Number.isNaN(k)) return null
+  const elapsed = (now.getTime() - k) / 60000
+  if (elapsed < 0) return null
+  if ((sport ?? 'football').toLowerCase() === 'football') {
+    if (elapsed < FIRST_HALF_MIN) return Math.floor(elapsed)
+    if (elapsed < FIRST_HALF_MIN + HALF_TIME_BREAK_MIN) return FIRST_HALF_MIN
+    if (elapsed < FOOTBALL_FULL_WALL) return Math.floor(elapsed - HALF_TIME_BREAK_MIN)
+    return FULL_MATCH_MIN
+  }
+  const reg = REGULATION_MINUTES[(sport ?? '').toLowerCase()] ?? 90
+  return Math.min(Math.floor(elapsed), reg)
+}
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`
 }

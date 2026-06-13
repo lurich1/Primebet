@@ -5,6 +5,12 @@
 
 import type { CountryCode, CurrencyCode } from '@/lib/countries'
 
+/** A scripted goal on a custom match: which side scores, at what match minute. */
+export interface MatchGoal {
+  minute: number
+  team: 'home' | 'away'
+}
+
 export interface Match {
   id: string
   league: string
@@ -33,6 +39,8 @@ export interface Match {
   countryFlagUrl?: string
   /** Admin manual lock — when true, no new bets are accepted regardless of isLive / startTime. */
   locked?: boolean
+  /** Scripted goal timeline (custom matches): drives the live score off the clock. */
+  goals?: MatchGoal[]
 }
 
 export interface OverUnderLine {

@@ -4,7 +4,21 @@ import {
   addCustomMatch,
 } from '@/lib/custom-matches-store'
 import { supportedSports } from '@/lib/api/odds'
-import type { Match } from '@/lib/domain-types'
+import type { Match, MatchGoal } from '@/lib/domain-types'
+
+/** Validate an incoming goal script into clean MatchGoal[]. */
+function sanitizeGoals(raw: unknown): MatchGoal[] {
+  if (!Array.isArray(raw)) return []
+  const out: MatchGoal[] = []
+  for (const g of raw) {
+    const minute = Number((g as { minute?: unknown })?.minute)
+    const team = (g as { team?: unknown })?.team
+    if (Number.isFinite(minute) && minute >= 0 && minute <= 130 && (team === 'home' || team === 'away')) {
+      out.push({ minute: Math.floor(minute), team })
+    }
+  }
+  return out.sort((a, b) => a.minute - b.minute)
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -22,11 +36,15 @@ interface CreatePayload {
   homeFlagUrl?: string
   awayFlagUrl?: string
   startTime?: string
+  /** Full ISO kickoff timestamp for a scheduled match (enables auto-start). */
+  startTimeISO?: string
   isLive?: boolean
   minute?: string
   homeScore?: number
   awayScore?: number
   odds?: { home?: number; draw?: number; away?: number }
+  /** Scripted goal timeline, e.g. [{ minute: 20, team: 'home' }]. */
+  goals?: unknown
 }
 
 export async function POST(request: Request) {
@@ -70,6 +88,19 @@ export async function POST(request: Request) {
   const awayFlagUrl = (body.awayFlagUrl ?? '').trim() || undefined
 
   const isLive = body.isLive === true
+  const goals = sanitizeGoals(body.goals)
+
+  // A scheduled match can carry a full ISO kickoff so it auto-starts at that
+  // time; derive the "HH:MM" display label from it when not given explicitly.
+  const startISO = (body.startTimeISO ?? '').trim() || undefined
+  let startLabel = (body.startTime ?? '').trim() || undefined
+  if (!startLabel && startISO) {
+    const d = new Date(startISO)
+    if (!Number.isNaN(d.getTime())) {
+      startLabel = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    }
+  }
+
   const match: Omit<Match, 'id' | 'custom'> & { sport: string } = {
     sport,
     league,
@@ -79,6 +110,7 @@ export async function POST(request: Request) {
     homeFlagUrl,
     awayFlagUrl,
     isLive,
+    goals,
     odds: {
       home: +home.toFixed(2),
       draw: Number.isFinite(draw) && draw > 1 ? +draw.toFixed(2) : 0,
@@ -93,8 +125,10 @@ export async function POST(request: Request) {
           awayScore: Number.isFinite(Number(body.awayScore))
             ? Math.max(0, Math.floor(Number(body.awayScore)))
             : 0,
+          startTime: startLabel,
+          startTimeISO: startISO,
         }
-      : { startTime: (body.startTime ?? '').trim() || undefined }),
+      : { startTime: startLabel, startTimeISO: startISO }),
   }
 
   const created = await addCustomMatch(match)

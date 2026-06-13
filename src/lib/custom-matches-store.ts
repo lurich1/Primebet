@@ -1,5 +1,6 @@
-import type { Match } from '@/lib/domain-types'
+import type { Match, MatchGoal } from '@/lib/domain-types'
 import { supabaseServer } from '@/lib/supabase'
+import { liveClockLabel, matchMinuteFromKickoff } from '@/lib/match-betting'
 
 interface CustomMatchRow {
   id: string
@@ -21,7 +22,24 @@ interface CustomMatchRow {
   odds_home: number
   odds_draw: number
   odds_away: number
+  goals: unknown
   created_at: string
+}
+
+/** Sanitise the stored goal script into a sorted, valid MatchGoal[]. */
+function parseGoals(raw: unknown): MatchGoal[] {
+  if (!Array.isArray(raw)) return []
+  const out: MatchGoal[] = []
+  for (const g of raw) {
+    if (g && typeof g === 'object') {
+      const minute = Number((g as { minute?: unknown }).minute)
+      const team = (g as { team?: unknown }).team
+      if (Number.isFinite(minute) && minute >= 0 && (team === 'home' || team === 'away')) {
+        out.push({ minute: Math.floor(minute), team })
+      }
+    }
+  }
+  return out.sort((a, b) => a.minute - b.minute)
 }
 
 /**
@@ -98,6 +116,30 @@ function tickingMinute(row: CustomMatchRow): string | undefined {
 }
 
 function rowToMatch(row: CustomMatchRow): Match {
+  const startISO = row.start_time_utc ?? undefined
+  const goals = parseGoals(row.goals)
+
+  // Auto-start: once the scheduled kickoff passes, the match goes live on its
+  // own (and ends after the live window) — no manual toggle needed. An explicit
+  // is_live flag still forces live for the old manual flow.
+  const clock = liveClockLabel(startISO, row.sport)
+  const isLive = row.is_live || clock.live
+
+  // Scripted score: when a goal timeline is set, derive the score from how many
+  // goals have happened by the current match minute. Before kickoff, no score.
+  let homeScore = row.home_score ?? undefined
+  let awayScore = row.away_score ?? undefined
+  if (goals.length && startISO) {
+    const minute = matchMinuteFromKickoff(startISO, row.sport)
+    if (minute === null) {
+      homeScore = undefined
+      awayScore = undefined
+    } else {
+      homeScore = goals.filter((g) => g.team === 'home' && g.minute <= minute).length
+      awayScore = goals.filter((g) => g.team === 'away' && g.minute <= minute).length
+    }
+  }
+
   return {
     id: row.id,
     league: row.league,
@@ -106,12 +148,12 @@ function rowToMatch(row: CustomMatchRow): Match {
     awayTeam: row.away_team,
     homeFlagUrl: row.home_flag_url ?? undefined,
     awayFlagUrl: row.away_flag_url ?? undefined,
-    homeScore: row.home_score ?? undefined,
-    awayScore: row.away_score ?? undefined,
+    homeScore,
+    awayScore,
     minute: tickingMinute(row),
     startTime: row.start_time ?? undefined,
-    startTimeISO: row.start_time_utc ?? undefined,
-    isLive: row.is_live,
+    startTimeISO: startISO,
+    isLive,
     locked: row.locked ?? false,
     odds: {
       home: Number(row.odds_home),
@@ -120,6 +162,7 @@ function rowToMatch(row: CustomMatchRow): Match {
     },
     sport: row.sport,
     custom: true,
+    goals,
   }
 }
 
@@ -147,6 +190,7 @@ function matchToRow(input: Omit<Match, 'id' | 'custom'> & { sport: string }) {
     odds_home: input.odds.home,
     odds_draw: input.odds.draw,
     odds_away: input.odds.away,
+    goals: input.goals ?? [],
   }
 }
 
@@ -206,6 +250,7 @@ export async function updateCustomMatch(
   }
   if (patch.startTime !== undefined) dbPatch.start_time = patch.startTime
   if (patch.startTimeISO !== undefined) dbPatch.start_time_utc = patch.startTimeISO
+  if (patch.goals !== undefined) dbPatch.goals = patch.goals
   if (patch.isLive !== undefined) dbPatch.is_live = patch.isLive
   if (patch.locked !== undefined) dbPatch.locked = patch.locked
   if (patch.sport !== undefined) dbPatch.sport = patch.sport
