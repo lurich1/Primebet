@@ -646,6 +646,24 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
   const [sched, setSched] = useState(false)
   const [kickoff, setKickoff] = useState(isoToLocalInput(match.startTimeISO))
   const [goals, setGoals] = useState<MatchGoal[]>(match.goals ?? [])
+  const [uploadingSide, setUploadingSide] = useState<'home' | 'away' | null>(null)
+
+  // Upload a replacement crest for this match and persist it immediately.
+  const uploadRowFlag = async (side: 'home' | 'away', file: File) => {
+    setUploadingSide(side)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/admin/upload-flag', { method: 'POST', body })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      onPatch(side === 'home' ? { homeFlagUrl: data.url } : { awayFlagUrl: data.url })
+    } catch {
+      /* surfaced by the parent's error state on the next patch */
+    } finally {
+      setUploadingSide(null)
+    }
+  }
 
   const saveSchedule = () => {
     onPatch({
@@ -801,7 +819,7 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               disabled={busy}
               className="h-8 text-xs"
             >
-              Schedule &amp; goals
+              Edit flags, time &amp; goals
             </Button>
           )}
           <Button
@@ -888,6 +906,28 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
 
       {sched && (
         <div className="bg-secondary/40 border border-border rounded-lg p-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>{match.homeTeam} flag</Label>
+              <FlagPicker
+                label={match.homeTeam}
+                url={match.homeFlagUrl ?? ''}
+                uploading={uploadingSide === 'home'}
+                onPick={(f) => void uploadRowFlag('home', f)}
+                onClear={() => onPatch({ homeFlagUrl: '' })}
+              />
+            </div>
+            <div>
+              <Label>{match.awayTeam} flag</Label>
+              <FlagPicker
+                label={match.awayTeam}
+                url={match.awayFlagUrl ?? ''}
+                uploading={uploadingSide === 'away'}
+                onPick={(f) => void uploadRowFlag('away', f)}
+                onClear={() => onPatch({ awayFlagUrl: '' })}
+              />
+            </div>
+          </div>
           <div>
             <Label>Kickoff date &amp; time</Label>
             <Input
