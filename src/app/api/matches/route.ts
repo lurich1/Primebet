@@ -4,7 +4,16 @@ import { readCustomMatchesForSport } from '@/lib/custom-matches-store'
 import { readMatchOverridesMap, type MatchOverride } from '@/lib/match-overrides-store'
 import { deriveMarketBook } from '@/lib/markets'
 import { settlePendingBets } from '@/lib/settle-bets'
+import { liveClockLabel } from '@/lib/match-betting'
 import type { Match } from '@/lib/domain-types'
+
+/**
+ * A match has finished and should drop off the public listings when it's been
+ * explicitly finalised (minute 'FT') OR its auto-clock has run past full time.
+ */
+function isFinished(m: Match): boolean {
+  return m.minute === 'FT' || liveClockLabel(m.startTimeISO, m.sport).label === 'FT'
+}
 
 // Auto-settle finished bets off the match feed. This route is polled every 30s
 // by every visitor, so while the site has any traffic, a finished match's bets
@@ -95,11 +104,11 @@ export async function GET(request: Request) {
     overrides = new Map()
   }
 
-  // Hide finished custom matches from the public feed. A finished match
-  // has minute === 'FT' (set by the admin "Final result" button).
+  // Hide finished custom matches from the public feed — both ones the admin
+  // finalised (minute 'FT') and ones whose auto-clock has run past full time.
   const allCustom = await readCustomMatchesForSport(sport)
   const customMatches = hydrateAll(
-    allCustom.filter((m) => m.minute !== 'FT'),
+    allCustom.filter((m) => !isFinished(m)),
     overrides,
   )
   const maybeFilter = (list: Match[]) => (todayOnly ? filterToday(list, tzOffset) : list)
