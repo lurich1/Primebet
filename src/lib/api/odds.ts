@@ -195,17 +195,25 @@ async function apiFetch<T>(
     const errs = json.errors as Record<string, string>
     const ipMsg = errs.Ip ?? errs.ip
     if (ipMsg) throw new Error(`API-Football: ${ipMsg}`)
+    // Quota: API-Football returns 200 with errors.requests when the daily
+    // request limit is hit. Surface it loudly instead of silently showing
+    // "no events" — it means the plan needs upgrading (or the day to reset).
+    if (errs.requests) throw new Error(`API-Football daily request limit reached — ${errs.requests}`)
+    const tokenMsg = errs.token ?? errs.Token ?? errs.plan
+    if (tokenMsg) throw new Error(`API-Football: ${tokenMsg}`)
   }
   return json
 }
 
 async function fetchFixturesByDate(date: string, apiKey: string): Promise<Fixture[]> {
-  const json = await apiFetch<Fixture[]>(`/fixtures?date=${date}`, apiKey, 60)
+  // Pre-match fixtures barely change during the day — cache 30 min to spare the
+  // (free-tier) request quota.
+  const json = await apiFetch<Fixture[]>(`/fixtures?date=${date}`, apiKey, 1800)
   return json?.response ?? []
 }
 
 async function fetchLiveFixtures(apiKey: string): Promise<Fixture[]> {
-  const json = await apiFetch<Fixture[]>(`/fixtures?live=all`, apiKey, 30)
+  const json = await apiFetch<Fixture[]>(`/fixtures?live=all`, apiKey, 300)
   return json?.response ?? []
 }
 
@@ -221,7 +229,7 @@ async function fetchOddsForLeague(
     const json = await apiFetch<OddsRow[]>(
       `/odds?league=${leagueId}&season=${season}&date=${date}&page=${page}`,
       apiKey,
-      300,
+      1800,
     )
     if (!json) break
     all.push(...json.response)
@@ -234,7 +242,7 @@ async function fetchLiveOdds(apiKey: string): Promise<OddsRow[]> {
   // /odds/live with no params returns every currently in-play game globally
   // in a single call — much cheaper than per-league when we want to include
   // any live football match, not just whitelisted leagues.
-  const json = await apiFetch<LiveOddsRow[]>(`/odds/live`, apiKey, 30)
+  const json = await apiFetch<LiveOddsRow[]>(`/odds/live`, apiKey, 300)
   const rows = json?.response ?? []
   return rows.map((r) => ({
     fixture: r.fixture,
