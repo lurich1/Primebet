@@ -55,6 +55,13 @@ export function StatRibbon() {
   return (
     <div className="flex gap-2.5 overflow-x-auto no-scrollbar mt-4">
       <Link
+        href="/booking"
+        className="shrink-0 flex items-center gap-2 rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-violet)]/10 px-3.5 py-2.5 hover:bg-[var(--color-violet)]/15 transition"
+      >
+        <span className="text-[15px]">📥</span>
+        <span className="font-display font-bold text-[12.5px] text-[var(--color-violet)]">Load Booking Code</span>
+      </Link>
+      <Link
         href="/verify"
         className="shrink-0 flex items-center gap-2 rounded-xl border border-[var(--color-cyan)]/30 bg-[var(--color-cyan)]/8 px-3.5 py-2.5 hover:bg-[var(--color-cyan)]/15 transition"
       >
