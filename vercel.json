@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/cron/settle-bets", "schedule": "* * * * *" }
+    { "path": "/api/cron/settle-bets", "schedule": "0 0 * * *" }
   ]
 }
