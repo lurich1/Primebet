@@ -3,7 +3,25 @@ import { getMatchesForSport, supportedSports } from '@/lib/api/odds'
 import { readCustomMatchesForSport } from '@/lib/custom-matches-store'
 import { readMatchOverridesMap, type MatchOverride } from '@/lib/match-overrides-store'
 import { deriveMarketBook } from '@/lib/markets'
+import { settlePendingBets } from '@/lib/settle-bets'
 import type { Match } from '@/lib/domain-types'
+
+// Auto-settle finished bets off the match feed. This route is polled every 30s
+// by every visitor, so while the site has any traffic, a finished match's bets
+// settle (and winners get credited) on their own within ~30s — no admin step.
+// Throttled per instance; settleBetIfPending makes duplicate runs harmless.
+let lastSettleAt = 0
+const SETTLE_THROTTLE_MS = 25_000
+async function maybeSettleBets(): Promise<void> {
+  const now = Date.now()
+  if (now - lastSettleAt < SETTLE_THROTTLE_MS) return
+  lastSettleAt = now
+  try {
+    await settlePendingBets()
+  } catch (e) {
+    console.error('[matches] auto-settle failed (feed still returned):', e)
+  }
+}
 
 // 30s so the ticking minute on live custom matches stays close to real
 // time. The Odds API responses inside this handler are cached for 60s.
@@ -64,6 +82,9 @@ export async function GET(request: Request) {
       { status: 400 },
     )
   }
+
+  // Settle finished bets in the background of the feed (throttled).
+  await maybeSettleBets()
 
   // Pull admin overrides up front; one map applies to both custom + API matches.
   // If the table doesn't exist yet (migration not run) we fall back to empty.
