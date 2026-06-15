@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
-// 60s — the ticker is a marketing prop, not real-time critical.
+// 60s — the ticker is a marketing prop, not real-time critical. Regenerating
+// each minute keeps the scroll feeling fresh.
 export const revalidate = 60
 
 export interface WinnerEntry {
-  /** Sportybet-style masked identifier, e.g. "02*****812" or "JK***DOE". */
+  /** Sportybet-style masked identifier, e.g. "02*****812". */
   masked: string
   amount: number
   currency: string
@@ -16,67 +16,48 @@ export interface WinnerEntry {
   code: string
 }
 
-interface WinnerRow {
-  code: string
-  payout: number | string | null
-  potential_win: number | string
-  currency: string | null
-  settled_at: string | null
-  users: { phone: string | null; name: string | null } | null
+// Amount band shown on the winners scroll. Override per-deploy with
+// WINNERS_MIN / WINNERS_MAX if you want a different range later.
+const MIN_WIN = Number(process.env.WINNERS_MIN ?? 2000) || 2000
+const MAX_WIN = Number(process.env.WINNERS_MAX ?? 6000) || 6000
+
+const GH_PREFIXES = ['024', '054', '055', '059', '020', '050', '026', '027', '053', '057']
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+function randInt(max: number): number {
+  return Math.floor(Math.random() * max)
 }
 
-/** "0241234567" → "02*****567"; 10-digit phones only, others fall back to a generic mask. */
-function maskPhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '')
-  if (digits.length < 6) return null
-  // Keep first 2 + last 3 visible like Sportybet does on its winners ticker.
-  const first = digits.slice(0, 2)
-  const last = digits.slice(-3)
-  const middleLen = Math.max(3, digits.length - 5)
-  return `${first}${'*'.repeat(middleLen)}${last}`
+/** A masked Ghana number like "024*****812". */
+function maskedPhone(): string {
+  const prefix = GH_PREFIXES[randInt(GH_PREFIXES.length)]
+  let rest = ''
+  for (let i = 0; i < 7; i++) rest += String(randInt(10))
+  const full = prefix + rest // 10 digits
+  return `${full.slice(0, 3)}*****${full.slice(-3)}`
 }
 
-function maskName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return 'A*******'
-  if (parts.length === 1) {
-    const p = parts[0]
-    return p.length <= 2 ? `${p[0]}***` : `${p[0]}${'*'.repeat(p.length - 2)}${p[p.length - 1]}`
-  }
-  const first = parts[0][0].toUpperCase()
-  const last = parts[parts.length - 1][0].toUpperCase()
-  return `${first}******${last}`
+function randomCode(): string {
+  let s = ''
+  for (let i = 0; i < 6; i++) s += CODE_ALPHABET[randInt(CODE_ALPHABET.length)]
+  return s
 }
 
 export async function GET() {
-  const supabase = supabaseServer()
-  const { data, error } = await supabase
-    .from('bets')
-    .select('code, payout, potential_win, currency, settled_at, users!inner(phone, name)')
-    .eq('status', 'won')
-    .order('payout', { ascending: false, nullsFirst: false })
-    .limit(15)
-
-  if (error) {
-    return NextResponse.json({ winners: [], error: error.message }, { status: 200 })
-  }
-
-  const rows = (data ?? []) as unknown as WinnerRow[]
-  const winners: WinnerEntry[] = rows
-    .map((r): WinnerEntry | null => {
-      const amount = Number(r.payout ?? r.potential_win)
-      if (!Number.isFinite(amount) || amount <= 0) return null
-      const u = r.users ?? null
-      const masked = (u?.phone && maskPhone(u.phone)) ?? (u?.name ? maskName(u.name) : 'A*******')
-      return {
-        masked,
-        amount: +amount.toFixed(2),
-        currency: r.currency ?? 'GHS',
-        settledAt: r.settled_at ?? new Date().toISOString(),
-        code: r.code,
-      }
-    })
-    .filter((w): w is WinnerEntry => w !== null)
+  const span = Math.max(0, MAX_WIN - MIN_WIN)
+  const now = Date.now()
+  const winners: WinnerEntry[] = Array.from({ length: 14 }, () => {
+    // Random amount in [MIN_WIN, MAX_WIN], rounded to the nearest 10.
+    const amount = Math.round((MIN_WIN + Math.random() * span) / 10) * 10
+    return {
+      masked: maskedPhone(),
+      amount,
+      currency: 'GHS',
+      // Settled sometime in the last ~2 hours, so timestamps look natural.
+      settledAt: new Date(now - randInt(120) * 60_000).toISOString(),
+      code: randomCode(),
+    }
+  }).sort((a, b) => b.amount - a.amount)
 
   return NextResponse.json({ winners })
 }
