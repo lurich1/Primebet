@@ -73,12 +73,24 @@ function rowToUser(row: UserRow): AppUser {
 }
 
 export async function readUsers(): Promise<AppUser[]> {
-  const { data, error } = await supabaseServer()
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`users.readAll: ${error.message}`)
-  return (data ?? []).map(rowToUser)
+  // Supabase/PostgREST caps a single select at 1000 rows by default, so once the
+  // platform passed 1000 players the admin list silently stopped growing. Page
+  // through in 1000-row chunks to return every user.
+  const sb = supabaseServer()
+  const PAGE = 1000
+  const out: AppUser[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1)
+    if (error) throw new Error(`users.readAll: ${error.message}`)
+    const rows = data ?? []
+    out.push(...rows.map(rowToUser))
+    if (rows.length < PAGE) break
+  }
+  return out
 }
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
