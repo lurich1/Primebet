@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     typeParam === 'deposit' || typeParam === 'withdrawal' ? typeParam : undefined
 
   const [payments, users] = await Promise.all([
-    listAllPayments({ type: typeFilter, limit: 1000 }),
+    listAllPayments({ type: typeFilter }),
     listUsersForAdmin(),
   ])
 

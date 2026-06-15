@@ -118,15 +118,26 @@ export async function listPaymentsForUser(userId: string): Promise<PaymentRecord
  */
 export async function listAllPayments(opts?: {
   type?: PaymentType
-  limit?: number
+  /** Safety ceiling on how many rows to pull (paginated). Defaults to 50k. */
+  max?: number
 }): Promise<PaymentRecord[]> {
-  const { data, error } = await supabaseServer()
-    .from('payments')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(opts?.limit ?? 500)
-  if (error) throw new Error(`payments.listAll: ${error.message}`)
-  const all = ((data ?? []) as PaymentRow[]).map(rowToRecord)
+  // PostgREST caps a single select at 1000 rows; page through so the admin
+  // sees every transaction once the platform has more than 1000 payments.
+  const sb = supabaseServer()
+  const PAGE = 1000
+  const max = opts?.max ?? 50000
+  const all: PaymentRecord[] = []
+  for (let from = 0; from < max; from += PAGE) {
+    const { data, error } = await sb
+      .from('payments')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, Math.min(from + PAGE, max) - 1)
+    if (error) throw new Error(`payments.listAll: ${error.message}`)
+    const rows = (data ?? []) as PaymentRow[]
+    all.push(...rows.map(rowToRecord))
+    if (rows.length < PAGE) break
+  }
   return opts?.type ? all.filter((p) => p.type === opts.type) : all
 }
 

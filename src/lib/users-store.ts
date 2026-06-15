@@ -316,12 +316,8 @@ export async function setWithdrawalApproval(
  * the admin Pending Withdrawals page.
  */
 export async function listUsersForAdmin(): Promise<AppUser[]> {
-  const { data, error } = await supabaseServer()
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`users.listForAdmin: ${error.message}`)
-  return (data ?? []).map(rowToUser)
+  // Same data as readUsers — paginated so it isn't capped at 1000 rows.
+  return readUsers()
 }
 
 /**
