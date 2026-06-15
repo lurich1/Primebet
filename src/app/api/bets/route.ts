@@ -56,6 +56,12 @@ export async function GET(request: Request) {
     )
   }
 
+  // Auto-settle finished bets before the admin sees the list, so wins/losses
+  // are already marked (and winners credited) when the Bets page opens — the
+  // admin shouldn't have to settle anything by hand.
+  await settlePendingBets().catch((e) => {
+    console.error('[bets] admin auto-settle failed (listing still returned):', e)
+  })
   const bets = await readBets()
   return NextResponse.json({ bets })
 }
