@@ -168,6 +168,46 @@ export function matchMinuteFromKickoff(
   return Math.min(Math.floor(elapsed), reg)
 }
 
+/**
+ * Shift 1X2 odds to reflect the live scoreline, like a real book: the team in
+ * front shortens, the team behind drifts out, and the swing grows with the size
+ * of the lead and how late it is. Pure display drama for custom matches (live
+ * betting is locked anyway). Draw odds of 0 (no draw market) stay 0.
+ */
+export function liveOddsForScore(
+  base: { home: number; draw: number; away: number },
+  homeScore: number,
+  awayScore: number,
+  minute: number,
+): { home: number; draw: number; away: number } {
+  const lead = homeScore - awayScore
+  const t = Math.max(0, Math.min(1, minute / 90)) // 0 at KO → 1 at full time
+  const k = 0.25 + 0.55 * t // adjustment strength grows through the match
+  const f = Math.min(Math.abs(lead), 3) * k
+  const floor = (x: number) => Math.max(1.01, Math.round(x * 100) / 100)
+
+  let { home, draw, away } = base
+  if (lead > 0) {
+    home = home * (1 - 0.18 * f)
+    away = away * (1 + 0.55 * f)
+    draw = draw * (1 + 0.15 * f)
+  } else if (lead < 0) {
+    away = away * (1 - 0.18 * f)
+    home = home * (1 + 0.55 * f)
+    draw = draw * (1 + 0.15 * f)
+  } else {
+    // Level: a draw gets likelier as time runs out; both wins drift slightly.
+    draw = draw * (1 - 0.18 * t)
+    home = home * (1 + 0.08 * t)
+    away = away * (1 + 0.08 * t)
+  }
+  return {
+    home: floor(home),
+    draw: draw > 0 ? floor(draw) : 0,
+    away: floor(away),
+  }
+}
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`
 }

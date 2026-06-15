@@ -1,6 +1,6 @@
 import type { Match, MatchGoal } from '@/lib/domain-types'
 import { supabaseServer } from '@/lib/supabase'
-import { liveClockLabel, matchMinuteFromKickoff } from '@/lib/match-betting'
+import { liveClockLabel, matchMinuteFromKickoff, liveOddsForScore } from '@/lib/match-betting'
 
 interface CustomMatchRow {
   id: string
@@ -140,6 +140,20 @@ function rowToMatch(row: CustomMatchRow): Match {
     }
   }
 
+  const minuteStr = tickingMinute(row)
+
+  // Base (pre-match) odds set by the admin. Once the match is live with a
+  // score, drift them with the scoreline so the board moves like a real book.
+  let odds = {
+    home: Number(row.odds_home),
+    draw: Number(row.odds_draw),
+    away: Number(row.odds_away),
+  }
+  if (isLive && homeScore != null && awayScore != null) {
+    const liveMin = matchMinuteFromKickoff(startISO, row.sport) ?? parseMinute(minuteStr ?? null) ?? 0
+    odds = liveOddsForScore(odds, homeScore, awayScore, liveMin)
+  }
+
   return {
     id: row.id,
     league: row.league,
@@ -150,16 +164,12 @@ function rowToMatch(row: CustomMatchRow): Match {
     awayFlagUrl: row.away_flag_url ?? undefined,
     homeScore,
     awayScore,
-    minute: tickingMinute(row),
+    minute: minuteStr,
     startTime: row.start_time ?? undefined,
     startTimeISO: startISO,
     isLive,
     locked: row.locked ?? false,
-    odds: {
-      home: Number(row.odds_home),
-      draw: Number(row.odds_draw),
-      away: Number(row.odds_away),
-    },
+    odds,
     sport: row.sport,
     custom: true,
     goals,
