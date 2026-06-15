@@ -38,12 +38,18 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [referral, setReferral] = useState("");
+  // When the code came from a partner's referral link it's locked — the new
+  // user can't change whose referral they signed up under.
+  const [referralLocked, setReferralLocked] = useState(false);
   const router = useRouter();
 
-  // Pick up a partner referral code from /register?ref=CODE.
+  // Pick up a partner referral code from /register?ref=CODE and lock it.
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref) setReferral(ref.trim().toUpperCase());
+    if (ref && ref.trim()) {
+      setReferral(ref.trim().toUpperCase());
+      setReferralLocked(true);
+    }
   }, []);
 
   const country = COUNTRIES.find((c) => c.dial === dial) ?? COUNTRIES[0];
@@ -139,13 +145,25 @@ export default function RegisterPage() {
           </div>
         </Field>
 
-        <Field label="Referral code (optional)">
+        <Field label={referralLocked ? "Referral code (from your invite)" : "Referral code (optional)"}>
           <input
             value={referral}
             onChange={(e) => setReferral(e.target.value.toUpperCase())}
             placeholder="Partner code"
-            className={inputCls + " font-mono tracking-widest"}
+            readOnly={referralLocked}
+            aria-readonly={referralLocked}
+            tabIndex={referralLocked ? -1 : undefined}
+            className={
+              inputCls +
+              " font-mono tracking-widest" +
+              (referralLocked ? " opacity-70 cursor-not-allowed pointer-events-none" : "")
+            }
           />
+          {referralLocked && (
+            <p className="mt-1.5 text-[11.5px] text-[var(--color-ink-faint)]">
+              Applied from your partner&apos;s invite link — this can&apos;t be changed.
+            </p>
+          )}
         </Field>
 
         {error && (
