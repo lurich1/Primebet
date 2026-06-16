@@ -535,6 +535,11 @@ function PaymentModal({
                   <li>Enter the amount and upload your payment screenshot below.</li>
                   <li>We confirm and credit your balance — usually within minutes.</li>
                 </ol>
+                <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--color-amber)] bg-[var(--color-amber)]/10 border border-[var(--color-amber)]/25 rounded-lg px-3 py-2">
+                  ℹ️ This is our <span className="font-semibold">trusted deposit agent</span>. Our instant
+                  payment is being upgraded — for now, send to the number above and your balance is
+                  credited as soon as we confirm. Thank you for your patience.
+                </p>
               </div>
             ) : (
               <>
