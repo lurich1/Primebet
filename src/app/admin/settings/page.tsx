@@ -86,6 +86,8 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
+      <DepositAccountCard />
+
       {loading && !status && (
         <div className="space-y-3">
           <Skeleton className="h-32 rounded-xl" />
@@ -205,6 +207,90 @@ export default function AdminSettingsPage() {
         </Button>
       </section>
     </div>
+  )
+}
+
+function DepositAccountCard() {
+  const [number, setNumber] = useState('')
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/admin/settings/deposit', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { setNumber(d.number ?? ''); setName(d.name ?? '') })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      const res = await fetch('/api/admin/settings/deposit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ number, name }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setNumber(data.number ?? number)
+      setMsg('Saved — the deposit screen now shows this number.')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
+      <header className="px-4 py-3 border-b border-border">
+        <h2 className="font-semibold text-title">Deposit account</h2>
+        <p className="text-xs text-muted-foreground">
+          The MoMo number customers send manual deposits to. Changes apply immediately — no redeploy.
+        </p>
+      </header>
+      <div className="p-4 space-y-3">
+        {loading ? (
+          <Skeleton className="h-10 rounded-lg" />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">MoMo number</label>
+                <input
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                  placeholder="0501084331"
+                  inputMode="numeric"
+                  className="w-full h-10 px-3 rounded-md bg-secondary border border-border text-sm font-mono tabular-nums"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Account name</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Plusebet"
+                  className="w-full h-10 px-3 rounded-md bg-secondary border border-border text-sm"
+                />
+              </div>
+            </div>
+            {msg && <p className="text-xs text-success flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> {msg}</p>}
+            {err && <p className="text-xs text-destructive flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5" /> {err}</p>}
+            <div className="flex justify-end">
+              <Button onClick={() => void save()} disabled={saving} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 
