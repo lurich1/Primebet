@@ -288,7 +288,7 @@ function PaymentModal({
   // Manual deposit: customer pays our MoMo number and uploads the screenshot.
   const [file, setFile] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
-  const DEPOSIT_NUMBER = process.env.NEXT_PUBLIC_DEPOSIT_NUMBER || "0540803286";
+  const DEPOSIT_NUMBER = process.env.NEXT_PUBLIC_DEPOSIT_NUMBER || "0501084331";
   const DEPOSIT_NAME = process.env.NEXT_PUBLIC_DEPOSIT_NAME || "Plusebet";
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
