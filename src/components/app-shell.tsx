@@ -8,6 +8,7 @@ import { Sidebar, MobileSidebar } from "./sidebar";
 import { DesktopBetSlip, MobileBetSlip } from "./bet-slip";
 import { MobileNav } from "./mobile-nav";
 import { SupportChat } from "./support-chat";
+import { SiteFooter } from "./site-footer";
 
 export function AppShell({
   children,
@@ -33,6 +34,8 @@ export function AppShell({
         </main>
         {betSlip && <DesktopBetSlip />}
       </div>
+
+      <SiteFooter />
 
       <MobileSidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
       <MobileBetSlip />
