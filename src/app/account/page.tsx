@@ -285,6 +285,11 @@ function PaymentModal({
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [diag, setDiag] = useState(""); // temp: shows Moolre's raw reply on screen
+  // Manual deposit: customer pays our MoMo number and uploads the screenshot.
+  const [file, setFile] = useState<File | null>(null);
+  const [copied, setCopied] = useState(false);
+  const DEPOSIT_NUMBER = process.env.NEXT_PUBLIC_DEPOSIT_NUMBER || "0540803286";
+  const DEPOSIT_NAME = process.env.NEXT_PUBLIC_DEPOSIT_NAME || "Plusebet";
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
   const quick =
@@ -324,27 +329,41 @@ function PaymentModal({
     setError("Still waiting for confirmation. If you approved the payment, your balance will update once it settles — refresh in a minute.");
   }
 
-  // Hosted Moolre checkout — get a one-time URL and send the customer there to
-  // pay (MTN / Telecel / AirtelTigo). Moolre confirms + auto-credits on return.
+  function copyNumber() {
+    navigator.clipboard?.writeText(DEPOSIT_NUMBER).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }).catch(() => {});
+  }
+
+  // Manual deposit: the customer has paid our MoMo number; they upload the
+  // payment screenshot and we record a PENDING deposit for an admin to confirm
+  // and credit from the Payments page.
   async function deposit() {
+    if (!file) {
+      setError("Attach your payment screenshot to submit.");
+      return;
+    }
     setError(null);
     setBusy(true);
-    setStatus("Opening secure checkout…");
+    setStatus("Submitting your payment proof…");
     try {
-      const res = await fetch("/api/payments/moolre/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "Could not start the deposit.");
+      const fd = new FormData();
+      fd.append("userId", user.id);
+      fd.append("amount", String(amt));
+      fd.append("returnPath", "/account");
+      fd.append("file", file);
+      const res = await fetch("/api/payments/manual/start", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Could not submit your deposit. Please try again.");
         setBusy(false);
         return;
       }
-      window.location.href = data.url as string;
+      setDone(true);
     } catch {
       setError("Network error — please try again.");
+    } finally {
       setBusy(false);
     }
   }
@@ -421,9 +440,9 @@ function PaymentModal({
             <div className="grid place-items-center w-16 h-16 rounded-full grad-emerald mb-4 shadow-[0_10px_36px_-8px_rgba(52,211,153,.6)]">
               <Check size={30} className="text-white" />
             </div>
-            <h4 className="font-display font-extrabold text-[17px] capitalize">{type === "deposit" ? "Deposit complete" : "Withdrawal requested"}</h4>
+            <h4 className="font-display font-extrabold text-[17px] capitalize">{type === "deposit" ? "Deposit submitted" : "Withdrawal requested"}</h4>
             <p className="text-[13px] text-[var(--color-ink-dim)] mt-1.5">
-              {type === "deposit" ? "Your balance has been updated." : "Funds arrive after the operator processes your request."}
+              {type === "deposit" ? "We've received your payment proof. Your balance is credited once we confirm it — usually within minutes." : "Funds arrive after the operator processes your request."}
             </p>
             <button onClick={onClose} className="mt-6 w-full rounded-xl py-3 font-display font-bold grad-violet-pink text-white text-sm">Done</button>
           </div>
@@ -489,16 +508,24 @@ function PaymentModal({
         ) : (
           <div className="p-5 space-y-4">
             {type === "deposit" ? (
-              <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-2)] px-3.5 py-3">
-                <div className="flex items-center gap-2">
-                  {NETWORKS.map((n) => (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img key={n.id} src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain shrink-0" />
-                  ))}
+              <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
+                <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to</p>
+                <div className="flex items-center justify-between gap-2 mt-1.5">
+                  <span className="num text-[20px] font-extrabold text-white tracking-wide">{DEPOSIT_NUMBER}</span>
+                  <button
+                    type="button"
+                    onClick={copyNumber}
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-ink-dim)] hover:text-white transition"
+                  >
+                    {copied ? <><Check size={13} className="text-[var(--color-emerald)]" /> Copied</> : "Copy"}
+                  </button>
                 </div>
-                <p className="text-[12px] text-[var(--color-ink-dim)] leading-snug mt-2.5">
-                  Continue to the secure page to pay with MTN MoMo, Telecel Cash or AirtelTigo Money — your balance updates automatically once paid.
-                </p>
+                <p className="text-[12px] text-[var(--color-ink-dim)] mt-1">{DEPOSIT_NAME} · MTN MoMo</p>
+                <ol className="text-[11.5px] text-[var(--color-ink-dim)] leading-relaxed mt-2.5 list-decimal list-inside space-y-0.5">
+                  <li>Send the exact amount to the number above.</li>
+                  <li>Enter the amount and upload your payment screenshot below.</li>
+                  <li>We confirm and credit your balance — usually within minutes.</li>
+                </ol>
               </div>
             ) : (
               <>
@@ -562,6 +589,25 @@ function PaymentModal({
               )}
             </div>
 
+            {type === "deposit" && (
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Payment screenshot</label>
+                <label className={cn(
+                  "mt-2 flex items-center justify-center gap-2 rounded-xl border border-dashed px-3.5 py-3 text-[12.5px] cursor-pointer transition",
+                  file ? "border-[var(--color-emerald)]/50 text-[var(--color-emerald)] bg-[var(--color-emerald)]/8" : "border-[var(--color-line-2)] text-[var(--color-ink-dim)] hover:text-white",
+                )}>
+                  {file ? <><Check size={15} /> {file.name.length > 28 ? file.name.slice(0, 25) + "…" : file.name}</> : "📷 Tap to upload your payment screenshot"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={busy}
+                    onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(null); }}
+                  />
+                </label>
+              </div>
+            )}
+
             {type === "withdraw" && (
               <p className="text-[11.5px] text-[var(--color-ink-dim)]">Available: <span className="num font-bold text-white">{money(user.balance)}</span></p>
             )}
@@ -575,11 +621,11 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || belowMin || (type === "withdraw" && !phone.trim())}
+              disabled={busy || !(amt > 0) || belowMin || (type === "deposit" && !file) || (type === "withdraw" && !phone.trim())}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {type === "deposit" ? (busy ? "Redirecting…" : `Deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
+              {type === "deposit" ? (busy ? "Submitting…" : `Submit deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>
         )}

@@ -1,0 +1,11 @@
+-- Storage bucket for manual-deposit payment screenshots.
+--
+-- Manual deposits (customer pays our MoMo number and uploads proof) store the
+-- screenshot here; the admin views it on the Payments page before crediting.
+-- Created via the storage API (public bucket) — this file documents it for
+-- fresh environments. Equivalent dashboard step: Storage → New bucket
+-- "deposit-screenshots", Public.
+--
+-- insert into storage.buckets (id, name, public)
+-- values ('deposit-screenshots', 'deposit-screenshots', true)
+-- on conflict (id) do nothing;
