@@ -529,7 +529,7 @@ function PaymentModal({
                     {copied ? <><Check size={13} className="text-[var(--color-emerald)]" /> Copied</> : "Copy"}
                   </button>
                 </div>
-                <p className="text-[12px] text-[var(--color-ink-dim)] mt-1">{DEPOSIT_NAME} · Telecel Cash</p>
+                <p className="text-[12px] text-[var(--color-ink-dim)] mt-1">{DEPOSIT_NAME} · MTN MoMo</p>
                 <ol className="text-[11.5px] text-[var(--color-ink-dim)] leading-relaxed mt-2.5 list-decimal list-inside space-y-0.5">
                   <li>Send the exact amount to the number above.</li>
                   <li>Enter the amount and upload your payment screenshot below.</li>
