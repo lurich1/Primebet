@@ -289,7 +289,7 @@ function PaymentModal({
   const [file, setFile] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
   // Deposit account is an admin-editable DB setting; default until it loads.
-  const [depositInfo, setDepositInfo] = useState({ number: "0501084331", name: "Plusebet" });
+  const [depositInfo, setDepositInfo] = useState({ number: "0534922921", name: "KOJO MABIGMAN" });
   const DEPOSIT_NUMBER = depositInfo.number;
   const DEPOSIT_NAME = depositInfo.name;
   useEffect(() => {

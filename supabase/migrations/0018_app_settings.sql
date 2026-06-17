@@ -10,6 +10,6 @@ create table if not exists public.app_settings (
 -- Seed the deposit account so the manual-deposit screen has a number to show
 -- the moment this runs. Change these from Admin → Settings afterwards.
 insert into public.app_settings (key, value) values
-    ('deposit_number', '0501084331'),
-    ('deposit_name', 'Plusebet')
+    ('deposit_number', '0534922921'),
+    ('deposit_name', 'KOJO MABIGMAN')
 on conflict (key) do nothing;

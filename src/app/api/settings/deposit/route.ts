@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const s = await getSettings(['deposit_number', 'deposit_name'])
   return NextResponse.json({
-    number: s.deposit_number || process.env.NEXT_PUBLIC_DEPOSIT_NUMBER || '0501084331',
-    name: s.deposit_name || process.env.NEXT_PUBLIC_DEPOSIT_NAME || 'Plusebet',
+    number: s.deposit_number || process.env.NEXT_PUBLIC_DEPOSIT_NUMBER || '0534922921',
+    name: s.deposit_name || process.env.NEXT_PUBLIC_DEPOSIT_NAME || 'KOJO MABIGMAN',
   })
 }
