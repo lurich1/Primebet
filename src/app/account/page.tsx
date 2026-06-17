@@ -31,6 +31,13 @@ const NETWORKS = [
   { id: "airteltigo", name: "AirtelTigo", logo: "/networks/airteltigo.svg" },
 ] as const;
 
+// Manual-deposit agent accounts shown on the deposit screen (each with its
+// network logo). Customers pay any one of these and upload the screenshot.
+const DEPOSIT_ACCOUNTS = [
+  { name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
+  { name: "Adjei Bright", number: "0502470854", network: "Telecel Cash", logo: "/networks/telecel.svg" },
+] as const;
+
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<AccountUser | null>(null);
@@ -287,18 +294,7 @@ function PaymentModal({
   const [diag, setDiag] = useState(""); // temp: shows Moolre's raw reply on screen
   // Manual deposit: customer pays our MoMo number and uploads the screenshot.
   const [file, setFile] = useState<File | null>(null);
-  const [copied, setCopied] = useState(false);
-  // Deposit account is an admin-editable DB setting; default until it loads.
-  const [depositInfo, setDepositInfo] = useState({ number: "0534922921", name: "KOJO MABIGMAN" });
-  const DEPOSIT_NUMBER = depositInfo.number;
-  const DEPOSIT_NAME = depositInfo.name;
-  useEffect(() => {
-    if (type !== "deposit") return;
-    fetch("/api/settings/deposit")
-      .then((r) => r.json())
-      .then((d) => { if (d?.number) setDepositInfo({ number: d.number, name: d.name || "Plusebet" }); })
-      .catch(() => {});
-  }, [type]);
+  const [copiedNum, setCopiedNum] = useState<string | null>(null);
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
   const quick =
@@ -338,10 +334,10 @@ function PaymentModal({
     setError("Still waiting for confirmation. If you approved the payment, your balance will update once it settles — refresh in a minute.");
   }
 
-  function copyNumber() {
-    navigator.clipboard?.writeText(DEPOSIT_NUMBER).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+  function copyNumber(num: string) {
+    navigator.clipboard?.writeText(num).then(() => {
+      setCopiedNum(num);
+      setTimeout(() => setCopiedNum(null), 1800);
     }).catch(() => {});
   }
 
@@ -518,20 +514,28 @@ function PaymentModal({
           <div className="p-5 space-y-4">
             {type === "deposit" ? (
               <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to</p>
-                <div className="flex items-center justify-between gap-2 mt-1.5">
-                  <span className="num text-[20px] font-extrabold text-white tracking-wide">{DEPOSIT_NUMBER}</span>
-                  <button
-                    type="button"
-                    onClick={copyNumber}
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-ink-dim)] hover:text-white transition"
-                  >
-                    {copied ? <><Check size={13} className="text-[var(--color-emerald)]" /> Copied</> : "Copy"}
-                  </button>
+                <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to any of these</p>
+                <div className="space-y-2 mt-2">
+                  {DEPOSIT_ACCOUNTS.map((a) => (
+                    <div key={a.number} className="flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={a.logo} alt={a.network} className="w-9 h-9 rounded-md object-contain shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="num text-[17px] font-extrabold text-white tracking-wide leading-tight">{a.number}</div>
+                        <div className="text-[11px] text-[var(--color-ink-dim)] truncate">{a.name} · {a.network}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyNumber(a.number)}
+                        className="shrink-0 flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-ink-dim)] hover:text-white transition"
+                      >
+                        {copiedNum === a.number ? <><Check size={13} className="text-[var(--color-emerald)]" /> Copied</> : "Copy"}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[12px] text-[var(--color-ink-dim)] mt-1">{DEPOSIT_NAME} · MTN MoMo</p>
-                <ol className="text-[11.5px] text-[var(--color-ink-dim)] leading-relaxed mt-2.5 list-decimal list-inside space-y-0.5">
-                  <li>Send the exact amount to the number above.</li>
+                <ol className="text-[11.5px] text-[var(--color-ink-dim)] leading-relaxed mt-3 list-decimal list-inside space-y-0.5">
+                  <li>Send the exact amount to one of the numbers above.</li>
                   <li>Enter the amount and upload your payment screenshot below.</li>
                   <li>We confirm and credit your balance — usually within minutes.</li>
                 </ol>
