@@ -7,7 +7,6 @@ import { PromoStrip, StatRibbon, FeaturedMatch } from "@/components/home-section
 import { WinnersTicker } from "@/components/winners-ticker";
 import { competitions } from "@/lib/data";
 import { useMatches } from "@/lib/use-matches";
-import { cn } from "@/lib/utils";
 
 const FILTERS = ["All", "Football", "Top Leagues", "Boosted", "Ghana 🇬🇭"];
 
@@ -69,10 +68,6 @@ export default function Home() {
         </>
       )}
 
-      <button className="w-full mt-6 flex items-center justify-center gap-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] py-3.5 text-[13px] font-semibold text-[var(--color-ink-dim)] hover:text-white hover:border-[var(--color-line-2)] transition">
-        <span className={cn("inline-block w-3.5 h-3.5 rounded-full border-2 border-[var(--color-violet)] border-t-transparent animate-[spin_1s_linear_infinite]")} />
-        Load More Matches
-      </button>
     </AppShell>
   );
 }
