@@ -27,7 +27,7 @@ interface AccountUser {
 // number, so this is for the customer to confirm their wallet.
 const NETWORKS = [
   { id: "mtn", name: "MTN MoMo", logo: "/networks/mtn.svg" },
-  { id: "telecel", name: "Telecel Cash", logo: "/networks/telecel.svg" },
+  { id: "telecel", name: "TELECEL CASH", logo: "/networks/telecel.svg" },
   { id: "airteltigo", name: "AirtelTigo", logo: "/networks/airteltigo.svg" },
 ] as const;
 
@@ -35,7 +35,7 @@ const NETWORKS = [
 // network logo). Customers pay any one of these and upload the screenshot.
 const DEPOSIT_ACCOUNTS = [
   { name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
-  { name: "Adjei Bright", number: "0502470854", network: "Telecel Cash", logo: "/networks/telecel.svg" },
+  { name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
 ] as const;
 
 export default function AccountPage() {
