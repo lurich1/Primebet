@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { MatchCard, SectionHead } from "@/components/match-card";
 import { PromoStrip, StatRibbon, FeaturedMatch } from "@/components/home-sections";
 import { WinnersTicker } from "@/components/winners-ticker";
+import { WorldCupSplash } from "@/components/world-cup-splash";
 import { competitions } from "@/lib/data";
 import { useMatches } from "@/lib/use-matches";
 
@@ -30,6 +31,7 @@ export default function Home() {
 
   return (
     <AppShell>
+      <WorldCupSplash />
       <PromoStrip />
       <StatRibbon />
       <WinnersTicker />
