@@ -32,10 +32,12 @@ const NETWORKS = [
 ] as const;
 
 // Manual-deposit agent accounts shown on the deposit screen (each with its
-// network logo). Customers pay any one of these and upload the screenshot.
+// network logo). Customers see the accounts for their own country and pay any
+// one, then upload the screenshot.
 const DEPOSIT_ACCOUNTS = [
-  { name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
-  { name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
+  { country: "GH", name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
+  { country: "GH", name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
+  { country: "NG", name: "Onwueme Hilary", number: "2043162107", network: "Kuda Microfinance Bank", logo: "/networks/kuda.svg" },
 ] as const;
 
 export default function AccountPage() {
@@ -296,7 +298,12 @@ function PaymentModal({
   const [file, setFile] = useState<File | null>(null);
   const [copiedNum, setCopiedNum] = useState<string | null>(null);
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
-  const minDeposit = getMinFirstDeposit(getCountryForCurrency(cc).code);
+  const userCountry = getCountryForCurrency(cc).code;
+  const minDeposit = getMinFirstDeposit(userCountry);
+  // Show the deposit accounts for the user's country; fall back to all if none
+  // are configured for their country (so deposits are never blocked).
+  const byCountry = DEPOSIT_ACCOUNTS.filter((a) => a.country === userCountry);
+  const accounts = byCountry.length > 0 ? byCountry : DEPOSIT_ACCOUNTS;
   const quick =
     type === "deposit"
       ? [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
@@ -516,7 +523,7 @@ function PaymentModal({
               <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
                 <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to any of these</p>
                 <div className="space-y-2 mt-2">
-                  {DEPOSIT_ACCOUNTS.map((a) => (
+                  {accounts.map((a) => (
                     <div key={a.number} className="flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={a.logo} alt={a.network} className="w-9 h-9 rounded-md object-contain shrink-0" />
