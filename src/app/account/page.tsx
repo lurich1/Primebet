@@ -37,7 +37,7 @@ const NETWORKS = [
 const DEPOSIT_ACCOUNTS = [
   { country: "GH", name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
   { country: "GH", name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
-  { country: "NG", name: "Onwueme Hilary", number: "2043162107", network: "Kuda Microfinance Bank", logo: "/networks/kuda.svg" },
+  { country: "NG", name: "Onwueme Hilary", number: "2043162107", network: "Kuda Microfinance Bank", logo: "/networks/kuda.svg", flag: "/flags/nigeria.svg" },
 ] as const;
 
 export default function AccountPage() {
@@ -523,13 +523,21 @@ function PaymentModal({
               <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
                 <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to any of these</p>
                 <div className="space-y-2 mt-2">
-                  {accounts.map((a) => (
+                  {accounts.map((a) => {
+                    const flag = (a as { flag?: string }).flag;
+                    return (
                     <div key={a.number} className="flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={a.logo} alt={a.network} className="w-9 h-9 rounded-md object-contain shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="num text-[17px] font-extrabold text-white tracking-wide leading-tight">{a.number}</div>
-                        <div className="text-[11px] text-[var(--color-ink-dim)] truncate">{a.name} · {a.network}</div>
+                        <div className="text-[11px] text-[var(--color-ink-dim)] truncate flex items-center gap-1.5">
+                          {flag && (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={flag} alt="" className="w-4 h-3 rounded-[2px] object-cover" />
+                          )}
+                          {a.name} · {a.network}
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -539,7 +547,8 @@ function PaymentModal({
                         {copiedNum === a.number ? <><Check size={13} className="text-[var(--color-emerald)]" /> Copied</> : "Copy"}
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <ol className="text-[11.5px] text-[var(--color-ink-dim)] leading-relaxed mt-3 list-decimal list-inside space-y-0.5">
                   <li>Send the exact amount to one of the numbers above.</li>
