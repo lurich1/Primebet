@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Trash2, Ticket, Zap, ShieldCheck, ChevronUp, Loader2, LogIn, BookmarkPlus, Copy, Check, Share2 } from "lucide-react";
 import { useSlip, totalOdds } from "@/lib/store";
 import type { Selection } from "@/lib/types";
 import { getUserId } from "@/lib/user-session";
-import { cn, cedis } from "@/lib/utils";
+import { getCountryForCurrency, isCurrencyCode } from "@/lib/countries";
+import { formatMoneyWithCurrency } from "@/lib/format-money";
+import { cn } from "@/lib/utils";
 
 const QUICK = [20, 50, 100, 500];
 
@@ -27,6 +29,18 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
   const [loadCode, setLoadCode] = useState("");
   const [loadingCode, setLoadingCode] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Wallet currency, so the slip shows the user's currency (₦ for NG, GHS for GH…).
+  const [currency, setCurrency] = useState("GHS");
+  useEffect(() => {
+    const id = getUserId();
+    if (!id) return;
+    fetch(`/api/users/${id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d?.currency) setCurrency(d.currency); })
+      .catch(() => {});
+  }, []);
+  const money = (n: number) => formatMoneyWithCurrency(n, currency);
+  const symbol = getCountryForCurrency(isCurrencyCode(currency) ? currency : "GHS").currencySymbol;
   const odds = totalOdds(selections);
   const potential = stake * odds;
   const bonusPct = selections.length >= 5 ? 0.15 : selections.length >= 3 ? 0.08 : 0;
@@ -371,7 +385,7 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
         </div>
 
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--color-ink-faint)] num">GH₵</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--color-ink-faint)] num">{symbol}</span>
           <input
             type="number"
             value={stake || ""}
@@ -386,13 +400,13 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
           {bonus > 0 && (
             <Row
               label={<span className="flex items-center gap-1 text-[var(--color-amber)]"><Zap size={11} /> Acca boost +{bonusPct * 100}%</span>}
-              value={`+${cedis(bonus)}`}
+              value={`+${money(bonus)}`}
               valueClass="text-[var(--color-amber)]"
             />
           )}
           <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-line)]">
             <span className="text-[12px] text-[var(--color-ink-dim)]">Potential payout</span>
-            <span className="num text-[16px] font-extrabold grad-text">{cedis(potential + bonus)}</span>
+            <span className="num text-[16px] font-extrabold grad-text">{money(potential + bonus)}</span>
           </div>
         </div>
 
@@ -406,7 +420,7 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
           className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white shadow-[0_10px_30px_-8px_rgba(236,72,153,.5)] disabled:opacity-50 disabled:shadow-none active:scale-[.99] transition"
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
-          {busy ? "Placing…" : `Place Bet · ${cedis(stake)}`}
+          {busy ? "Placing…" : `Place Bet · ${money(stake)}`}
         </button>
 
         <button
