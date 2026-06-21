@@ -47,6 +47,8 @@ export default function AccountPage() {
   const [noSession, setNoSession] = useState(false);
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
   const [pwOpen, setPwOpen] = useState(false);
+  // Banner shown when the user returns from the Moolre checkout (?moolre=...).
+  const [returnMsg, setReturnMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const id = getUserId();
@@ -90,6 +92,22 @@ export default function AccountPage() {
       .catch(() => {});
   }, [refresh]);
 
+  // Show a result banner when Moolre sends the player back here after checkout.
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("moolre");
+    if (!status) return;
+    const ok = status === "success" || status === "already-credited";
+    setReturnMsg({
+      ok,
+      text: ok
+        ? "Deposit successful — your balance has been updated."
+        : "Your deposit wasn't completed. If you were charged, it'll reflect shortly.",
+    });
+    // Drop the ?moolre param so it doesn't re-show on refresh, and re-pull balance.
+    window.history.replaceState(null, "", window.location.pathname);
+    void refresh();
+  }, [refresh]);
+
   function signOut() {
     clearUserSession();
     router.push("/login");
@@ -128,6 +146,21 @@ export default function AccountPage() {
 
   return (
     <AppShell tabs={false}>
+      {returnMsg && (
+        <div
+          className={cn(
+            "mb-4 flex items-center gap-2.5 rounded-xl border px-4 py-3 text-[13px] font-semibold",
+            returnMsg.ok
+              ? "border-[var(--color-emerald)]/30 bg-[var(--color-emerald)]/10 text-[var(--color-emerald)]"
+              : "border-[var(--color-amber)]/30 bg-[var(--color-amber)]/10 text-[var(--color-amber)]",
+          )}
+        >
+          {returnMsg.ok ? <Check size={16} /> : <span>⚠️</span>}
+          <span className="flex-1">{returnMsg.text}</span>
+          <button onClick={() => setReturnMsg(null)} className="opacity-70 hover:opacity-100"><X size={15} /></button>
+        </div>
+      )}
+
       {/* hero */}
       <div className="grad-border overflow-hidden">
         <div className="relative p-5 sm:p-6">
