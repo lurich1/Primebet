@@ -299,6 +299,9 @@ function PaymentModal({
   const [copiedNum, setCopiedNum] = useState<string | null>(null);
   const cc = isCurrencyCode(user.currency) ? user.currency : "GHS";
   const userCountry = getCountryForCurrency(cc).code;
+  // GH uses Moolre's automated checkout; other countries use the manual
+  // pay-an-agent + upload-screenshot flow.
+  const useMoolre = getCountryForCurrency(cc).gateway === "moolre";
   const minDeposit = getMinFirstDeposit(userCountry);
   // Show the deposit accounts for the user's country; fall back to all if none
   // are configured for their country (so deposits are never blocked).
@@ -348,10 +351,40 @@ function PaymentModal({
     }).catch(() => {});
   }
 
-  // Manual deposit: the customer has paid our MoMo number; they upload the
-  // payment screenshot and we record a PENDING deposit for an admin to confirm
-  // and credit from the Payments page.
+  // Route the deposit to the right flow for the user's country.
   async function deposit() {
+    if (useMoolre) return depositMoolre();
+    return depositManual();
+  }
+
+  // Moolre (GH): mint a hosted-checkout URL and send the customer there to pay
+  // with MoMo. Moolre confirms + auto-credits on return.
+  async function depositMoolre() {
+    setError(null);
+    setBusy(true);
+    setStatus("Opening secure checkout…");
+    try {
+      const res = await fetch("/api/payments/moolre/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Could not start the deposit.");
+        setBusy(false);
+        return;
+      }
+      window.location.href = data.url as string;
+    } catch {
+      setError("Network error — please try again.");
+      setBusy(false);
+    }
+  }
+
+  // Manual (non-GH): the customer has paid our agent; they upload the payment
+  // screenshot and we record a PENDING deposit for an admin to confirm.
+  async function depositManual() {
     if (!file) {
       setError("Attach your payment screenshot to submit.");
       return;
@@ -520,6 +553,19 @@ function PaymentModal({
         ) : (
           <div className="p-5 space-y-4">
             {type === "deposit" ? (
+              useMoolre ? (
+              <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
+                <div className="flex items-center gap-2">
+                  {NETWORKS.map((n) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img key={n.id} src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain shrink-0" />
+                  ))}
+                </div>
+                <p className="text-[12px] text-[var(--color-ink-dim)] leading-snug mt-2.5">
+                  Continue to the secure page to pay with MTN MoMo, Telecel Cash or AirtelTigo Money — your balance updates automatically once paid.
+                </p>
+              </div>
+              ) : (
               <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
                 <p className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Send your deposit to any of these</p>
                 <div className="space-y-2 mt-2">
@@ -556,11 +602,11 @@ function PaymentModal({
                   <li>We confirm and credit your balance — usually within minutes.</li>
                 </ol>
                 <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--color-amber)] bg-[var(--color-amber)]/10 border border-[var(--color-amber)]/25 rounded-lg px-3 py-2">
-                  ℹ️ This is our <span className="font-semibold">trusted deposit agent</span>. Our instant
-                  payment is being upgraded — for now, send to the number above and your balance is
-                  credited as soon as we confirm. Thank you for your patience.
+                  ℹ️ This is our <span className="font-semibold">trusted deposit agent</span>. Send to
+                  the number above and your balance is credited as soon as we confirm.
                 </p>
               </div>
+              )
             ) : (
               <>
               <div>
@@ -623,7 +669,7 @@ function PaymentModal({
               )}
             </div>
 
-            {type === "deposit" && (
+            {type === "deposit" && !useMoolre && (
               <div>
                 <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Payment screenshot</label>
                 <label className={cn(
@@ -655,11 +701,15 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || belowMin || (type === "deposit" && !file) || (type === "withdraw" && !phone.trim())}
+              disabled={busy || !(amt > 0) || belowMin || (type === "deposit" && !useMoolre && !file) || (type === "withdraw" && !phone.trim())}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {type === "deposit" ? (busy ? "Submitting…" : `Submit deposit ${amt > 0 ? money(amt) : ""}`) : `Withdraw ${amt > 0 ? money(amt) : ""}`}
+              {type === "deposit"
+                ? busy
+                  ? (useMoolre ? "Redirecting…" : "Submitting…")
+                  : `${useMoolre ? "Deposit" : "Submit deposit"} ${amt > 0 ? money(amt) : ""}`
+                : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>
         )}
