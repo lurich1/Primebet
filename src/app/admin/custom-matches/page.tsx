@@ -642,11 +642,19 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
   const [home, setHome] = useState(String(match.homeScore ?? 0))
   const [away, setAway] = useState(String(match.awayScore ?? 0))
   const [minute, setMinute] = useState(match.minute ?? "1'")
-  // Schedule + goal-script editor
+  // Edit panel: details (fix spelling / odds) + schedule + goal script
   const [sched, setSched] = useState(false)
   const [kickoff, setKickoff] = useState(isoToLocalInput(match.startTimeISO))
   const [goals, setGoals] = useState<MatchGoal[]>(match.goals ?? [])
   const [uploadingSide, setUploadingSide] = useState<'home' | 'away' | null>(null)
+  // Editable match details.
+  const [league, setLeague] = useState(match.league)
+  const [country, setCountry] = useState(match.country ?? '')
+  const [homeTeam, setHomeTeam] = useState(match.homeTeam)
+  const [awayTeam, setAwayTeam] = useState(match.awayTeam)
+  const [oddsHome, setOddsHome] = useState(String(match.odds.home))
+  const [oddsDraw, setOddsDraw] = useState(String(match.odds.draw || ''))
+  const [oddsAway, setOddsAway] = useState(String(match.odds.away))
 
   // Upload a replacement crest for this match and persist it immediately.
   const uploadRowFlag = async (side: 'home' | 'away', file: File) => {
@@ -666,8 +674,19 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
   }
 
   const saveSchedule = () => {
+    const h = Number(oddsHome)
+    const d = Number(oddsDraw)
+    const a = Number(oddsAway)
     onPatch({
-      isLive: false,
+      homeTeam: homeTeam.trim() || match.homeTeam,
+      awayTeam: awayTeam.trim() || match.awayTeam,
+      league: league.trim() || match.league,
+      country: country.trim(),
+      odds: {
+        home: Number.isFinite(h) && h > 1 ? +h.toFixed(2) : match.odds.home,
+        draw: Number.isFinite(d) && d > 1 ? +d.toFixed(2) : 0,
+        away: Number.isFinite(a) && a > 1 ? +a.toFixed(2) : match.odds.away,
+      },
       goals,
       startTimeISO: kickoff ? new Date(kickoff).toISOString() : undefined,
     })
@@ -819,7 +838,7 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               disabled={busy}
               className="h-8 text-xs"
             >
-              Edit flags, time &amp; goals
+              Edit
             </Button>
           )}
           <Button
@@ -906,6 +925,39 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
 
       {sched && (
         <div className="bg-secondary/40 border border-border rounded-lg p-3 space-y-3">
+          {/* Details — fix spelling, league, odds */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Home team</Label>
+              <Input value={homeTeam} onChange={(e) => setHomeTeam(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+            <div>
+              <Label>Away team</Label>
+              <Input value={awayTeam} onChange={(e) => setAwayTeam(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+            <div>
+              <Label>League</Label>
+              <Input value={league} onChange={(e) => setLeague(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+            <div>
+              <Label>Country</Label>
+              <Input value={country} onChange={(e) => setCountry(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label>Odds — Home (1)</Label>
+              <Input type="number" step="0.01" min="1.01" value={oddsHome} onChange={(e) => setOddsHome(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+            <div>
+              <Label>Odds — Draw (X)</Label>
+              <Input type="number" step="0.01" min="1.01" value={oddsDraw} onChange={(e) => setOddsDraw(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+            <div>
+              <Label>Odds — Away (2)</Label>
+              <Input type="number" step="0.01" min="1.01" value={oddsAway} onChange={(e) => setOddsAway(e.target.value)} className="h-9 bg-secondary" disabled={busy} />
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>{match.homeTeam} flag</Label>
@@ -966,7 +1018,7 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               disabled={busy}
               className="h-8 text-xs bg-primary text-primary-foreground"
             >
-              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save schedule & goals'}
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save changes'}
             </Button>
           </div>
         </div>
