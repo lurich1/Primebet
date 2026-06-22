@@ -79,10 +79,18 @@
 /* ---- Base ---- */
 * {
   border-color: var(--color-line);
+  /* Kill the grey/blue flash when tapping on mobile — feels app-native. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
   scroll-behavior: smooth;
+  /* Native form controls (checkboxes, range) pick up the brand colour. */
+  accent-color: var(--color-violet);
+  /* Keep sticky headers from covering anchored content. */
+  scroll-padding-top: 80px;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -93,12 +101,45 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   min-height: 100dvh;
 }
 
 ::selection {
   background: rgba(139, 92, 246, 0.35);
   color: #fff;
+}
+
+/* Accessible keyboard focus — uses the brand violet, no new colours. */
+:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.75);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Interactive elements feel clickable + give tactile press feedback. */
+button:not(:disabled),
+a,
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+button:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+/* Media shouldn't be draggable/selectable like text. */
+img, svg { user-select: none; -webkit-user-drag: none; }
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ---- Scrollbar ---- */
@@ -186,6 +227,7 @@ body {
   border-color: rgba(139, 92, 246, 0.5);
   background: var(--color-surface-3);
 }
+.odds-btn:active { transform: scale(0.96); }
 .odds-btn[data-active="true"] {
   background: linear-gradient(135deg, var(--color-violet), var(--color-pink));
   border-color: transparent;
@@ -204,6 +246,10 @@ body {
   background: var(--color-surface-2);
   color: var(--color-ink-dim);
   transition: all 0.15s;
+}
+.chip:hover:not([data-active="true"]) {
+  border-color: var(--color-line-2);
+  color: var(--color-ink);
 }
 .chip[data-active="true"] {
   background: linear-gradient(135deg, var(--color-violet), var(--color-pink));
