@@ -342,7 +342,9 @@ function PaymentModal({
   const accounts = byCountry.length > 0 ? byCountry : DEPOSIT_ACCOUNTS;
   const quick =
     type === "deposit"
-      ? [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
+      ? userCountry === "GH"
+        ? [minDeposit, minDeposit * 2, 600, minDeposit * 5, minDeposit * 10]
+        : [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
       : [100, 200, 500, 1000];
   const amt = parseFloat(amount);
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
