@@ -343,7 +343,7 @@ function PaymentModal({
   const quick =
     type === "deposit"
       ? userCountry === "GH"
-        ? [minDeposit, minDeposit * 2, 600, minDeposit * 5, minDeposit * 10]
+        ? [minDeposit, minDeposit * 2, 864, 600, minDeposit * 5, minDeposit * 10]
         : [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
       : [100, 200, 500, 1000];
   const amt = parseFloat(amount);

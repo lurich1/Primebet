@@ -68,7 +68,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycError: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)',
     minFirstDeposit: 200,
     verificationAmount: 200,
-    withdrawQualifyTotal: 848,
+    withdrawQualifyTotal: 1464,
     gateway: 'moolre',
     payoutTarget: 'mobile',
     payoutNetworks: [
