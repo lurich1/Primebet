@@ -35,7 +35,6 @@ const NETWORKS = [
 // network logo). Customers see the accounts for their own country and pay any
 // one, then upload the screenshot.
 const DEPOSIT_ACCOUNTS = [
-  { country: "GH", name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
   { country: "GH", name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
   { country: "NG", name: "Onwueme Hilary", number: "2043162107", network: "Kuda Microfinance Bank", logo: "/networks/kuda.svg", flag: "/flags/nigeria.svg" },
 ] as const;
