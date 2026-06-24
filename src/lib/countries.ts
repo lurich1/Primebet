@@ -69,7 +69,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     minFirstDeposit: 200,
     verificationAmount: 200,
     withdrawQualifyTotal: 848,
-    gateway: 'manual',
+    gateway: 'paystack',
     payoutTarget: 'mobile',
     payoutNetworks: [
       { key: 'mtn', label: 'MTN MoMo' },
@@ -302,6 +302,19 @@ export function normalizePhone(country: CountryCode, raw: string): string | null
   // (ZA, Cameroon, Côte d'Ivoire, US) store the bare local digits.
   const TRUNK_ZERO = new Set<CountryCode>(['GH', 'NG', 'KE', 'UG', 'TZ', 'ZM', 'RW', 'GB'])
   return TRUNK_ZERO.has(country) ? '0' + local : local
+}
+
+/**
+ * Convert a stored/typed phone into international MSISDN form (no "+"), e.g.
+ * GH "0241234567" → "233241234567". Used by the SMS sender, which needs the
+ * country code prefixed. Returns null when the number can't be normalised.
+ */
+export function toInternationalPhone(country: CountryCode, raw: string): string | null {
+  const norm = normalizePhone(country, raw)
+  if (!norm) return null
+  const dial = COUNTRIES[country].dialCode
+  const local = norm.startsWith('0') ? norm.slice(1) : norm
+  return dial + local
 }
 
 /**

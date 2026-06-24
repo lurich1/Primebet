@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { setWithdrawalApproval, findUserById } from '@/lib/users-store'
+import { listPaymentsForUser } from '@/lib/payments-store'
+import { isCountryCode, toInternationalPhone } from '@/lib/countries'
+import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { sendSms } from '@/lib/sms'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +16,44 @@ interface Params {
 async function isAdminAuthenticated(): Promise<boolean> {
   const store = await cookies()
   return isValidSessionCookie(store.get(ADMIN_COOKIE)?.value)
+}
+
+/**
+ * Fire-and-forget: text the user that their withdrawal was approved, quoting
+ * the amount from their most recent pending withdrawal. Best-effort — any
+ * failure (no pending row, no phone, SMS error) is logged and swallowed so it
+ * never blocks the admin's approval action.
+ */
+async function notifyWithdrawalApproved(userId: string): Promise<void> {
+  try {
+    const user = await findUserById(userId)
+    if (!user) return
+
+    const payments = await listPaymentsForUser(userId)
+    const pending = payments.find(
+      (p) => p.type === 'withdrawal' && p.status === 'pending',
+    )
+    if (!pending) return // nothing to quote an amount for
+
+    // Prefer the payout number the user requested; fall back to their profile.
+    const payoutPhone =
+      (typeof pending.metadata?.phone === 'string' && pending.metadata.phone) ||
+      user.phone ||
+      ''
+    if (!payoutPhone || !isCountryCode(user.country)) return
+    const recipient = toInternationalPhone(user.country, payoutPhone)
+    if (!recipient) return
+
+    const amount = formatMoneyWithCurrency(pending.amount, pending.currency)
+    const message = `Primebet: Your withdrawal of ${amount} has been approved and is being processed. Thank you for playing with us.`
+
+    const result = await sendSms(recipient, message)
+    if (!result.ok) {
+      console.error('[withdraw-approve] SMS failed:', result.error)
+    }
+  } catch (e) {
+    console.error('[withdraw-approve] SMS notify error:', e)
+  }
 }
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -35,8 +77,17 @@ export async function PATCH(request: Request, { params }: Params) {
     )
   }
 
+  // Capture the prior state so we only text on a false → true transition
+  // (re-saving an already-approved user shouldn't spam them).
+  const before = await findUserById(id)
+  const wasApproved = before?.withdrawalApproved ?? false
+
   const user = await setWithdrawalApproval(id, body.withdrawalApproved)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
+
+  if (body.withdrawalApproved && !wasApproved) {
+    await notifyWithdrawalApproved(id)
+  }
 
   return NextResponse.json({
     user: {

@@ -3,38 +3,106 @@
 import { useEffect, useState } from "react";
 import { X, Zap } from "lucide-react";
 
-// Promotional popup advertising a featured match (Ghana vs England).
-// Shows once per session on the home page; tap anywhere / X / CTA to dismiss.
+// Promotional popup advertising featured FIFA World Cup 2026 matches. The
+// matchup rotates every 2 minutes. Shows once per session on the home page;
+// tap anywhere / X / CTA to dismiss.
 
-const ADVERT = {
-  league: "International Friendly",
-  home: { name: "Ghana", flag: "/flags/ghana.svg" },
-  away: { name: "England", flag: "/flags/england.svg" },
-  when: "Saturday · 8:00 PM",
-  odds: { home: "2.50", draw: "3.20", away: "2.70" },
-};
+const ROTATE_MS = 2 * 60 * 1000; // change the featured match every 2 minutes
+
+const MATCHES = [
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Brazil", flag: "🇧🇷" },
+    away: { name: "Argentina", flag: "🇦🇷" },
+    when: "Today · 8:00 PM",
+    odds: { home: "2.10", draw: "3.30", away: "3.10" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "France", flag: "🇫🇷" },
+    away: { name: "Spain", flag: "🇪🇸" },
+    when: "Today · 9:00 PM",
+    odds: { home: "2.45", draw: "3.25", away: "2.80" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Germany", flag: "🇩🇪" },
+    away: { name: "Portugal", flag: "🇵🇹" },
+    when: "Tomorrow · 7:30 PM",
+    odds: { home: "2.60", draw: "3.20", away: "2.65" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Netherlands", flag: "🇳🇱" },
+    away: { name: "USA", flag: "🇺🇸" },
+    when: "Tomorrow · 9:00 PM",
+    odds: { home: "1.95", draw: "3.40", away: "3.70" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Mexico", flag: "🇲🇽" },
+    away: { name: "Belgium", flag: "🇧🇪" },
+    when: "Sunday · 8:00 PM",
+    odds: { home: "3.10", draw: "3.20", away: "2.20" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Italy", flag: "🇮🇹" },
+    away: { name: "Croatia", flag: "🇭🇷" },
+    when: "Monday · 7:30 PM",
+    odds: { home: "2.30", draw: "3.10", away: "3.00" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Morocco", flag: "🇲🇦" },
+    away: { name: "Uruguay", flag: "🇺🇾" },
+    when: "Monday · 9:00 PM",
+    odds: { home: "2.75", draw: "3.15", away: "2.55" },
+  },
+  {
+    league: "FIFA World Cup 2026",
+    home: { name: "Japan", flag: "🇯🇵" },
+    away: { name: "Senegal", flag: "🇸🇳" },
+    when: "Tuesday · 8:00 PM",
+    odds: { home: "2.40", draw: "3.20", away: "2.85" },
+  },
+];
 
 export function MatchAdvert() {
   const [open, setOpen] = useState(false);
+  const [idx, setIdx] = useState(0);
 
   useEffect(() => {
+    // Open on a time-based match so different visits land on different games.
+    setIdx(Math.floor(Date.now() / ROTATE_MS) % MATCHES.length);
     try {
-      if (!sessionStorage.getItem("ad-gh-eng-seen")) setOpen(true);
+      if (!sessionStorage.getItem("ad-wc-seen")) setOpen(true);
     } catch {
       setOpen(true);
     }
   }, []);
 
+  // While the popup is open, advance to the next match every 2 minutes.
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => {
+      setIdx((i) => (i + 1) % MATCHES.length);
+    }, ROTATE_MS);
+    return () => clearInterval(t);
+  }, [open]);
+
   function close() {
     setOpen(false);
     try {
-      sessionStorage.setItem("ad-gh-eng-seen", "1");
+      sessionStorage.setItem("ad-wc-seen", "1");
     } catch {
       /* ignore */
     }
   }
 
   if (!open) return null;
+
+  const advert = MATCHES[idx];
 
   return (
     <div
@@ -65,28 +133,28 @@ export function MatchAdvert() {
 
         {/* Body */}
         <div className="relative px-6 pt-5 pb-6 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-rose)]/40 bg-[var(--color-rose)]/10 px-3.5 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[var(--color-rose)]">
-            🔥 BIG MATCH
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-amber)]/40 bg-[var(--color-amber)]/10 px-3.5 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[var(--color-amber)]">
+            🏆 WORLD CUP 2026
           </span>
 
           {/* Teams */}
           <div className="mt-6 flex items-center justify-center gap-4">
-            <Team name={ADVERT.home.name} flag={ADVERT.home.flag} />
+            <Team name={advert.home.name} flag={advert.home.flag} />
             <div className="flex flex-col items-center">
               <span className="font-display font-extrabold text-[22px] grad-text">VS</span>
             </div>
-            <Team name={ADVERT.away.name} flag={ADVERT.away.flag} />
+            <Team name={advert.away.name} flag={advert.away.flag} />
           </div>
 
           <p className="text-[12.5px] text-[var(--color-ink-dim)] mt-4">
-            {ADVERT.league} · <span className="text-white font-semibold">{ADVERT.when}</span>
+            {advert.league} · <span className="text-white font-semibold">{advert.when}</span>
           </p>
 
           {/* Odds */}
           <div className="grid grid-cols-3 gap-2.5 mt-5">
-            <Odd label="1" value={ADVERT.odds.home} />
-            <Odd label="X" value={ADVERT.odds.draw} />
-            <Odd label="2" value={ADVERT.odds.away} />
+            <Odd label="1" value={advert.odds.home} />
+            <Odd label="X" value={advert.odds.draw} />
+            <Odd label="2" value={advert.odds.away} />
           </div>
 
           {/* CTA */}
@@ -94,7 +162,7 @@ export function MatchAdvert() {
             onClick={close}
             className="mt-6 w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-display font-extrabold text-[15px] text-black grad-gold shadow-[0_12px_40px_-8px_rgba(250,204,21,.6)] active:scale-[.99] transition"
           >
-            Bet on {ADVERT.home.name} vs {ADVERT.away.name} <Zap size={17} className="fill-black" />
+            Bet on {advert.home.name} vs {advert.away.name} <Zap size={17} className="fill-black" />
           </button>
 
           <p className="text-[11px] text-[var(--color-ink-faint)] mt-3">
@@ -109,12 +177,9 @@ export function MatchAdvert() {
 function Team({ name, flag }: { name: string; flag: string }) {
   return (
     <div className="flex flex-col items-center gap-2 w-[34%]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={flag}
-        alt={name}
-        className="w-16 h-16 rounded-full object-cover ring-2 ring-white/15 shadow-lg"
-      />
+      <span className="grid place-items-center w-16 h-16 rounded-full text-[38px] leading-none ring-2 ring-white/15 shadow-lg bg-black/30">
+        {flag}
+      </span>
       <span className="font-display font-extrabold text-[15px]">{name}</span>
     </div>
   );
