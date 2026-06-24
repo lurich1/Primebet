@@ -335,6 +335,9 @@ function PaymentModal({
   // GH uses Moolre's automated checkout; other countries use the manual
   // pay-an-agent + upload-screenshot flow.
   const useMoolre = getCountryForCurrency(cc).gateway === "moolre";
+  // Paystack mobile-money checkout (e.g. Ghana). NETWORK ids (mtn/vod/atl) are
+  // Paystack's GH provider codes, sent as `provider` to the start endpoint.
+  const usePaystackMomo = getCountryForCurrency(cc).gateway === "paystack";
   const minDeposit = getMinFirstDeposit(userCountry);
   // Show the deposit accounts for the user's country; fall back to all if none
   // are configured for their country (so deposits are never blocked).
@@ -350,9 +353,9 @@ function PaymentModal({
   // Networks authorize differently: MTN/AirtelTigo push a PIN prompt; Telecel
   // Cash is approved by the customer dialing *110#.
   const approvalHint =
-    network === "telecel"
+    network === "vod"
       ? "On your phone, dial *110# → approve the payment to complete your deposit."
-      : network === "airteltigo"
+      : network === "atl"
         ? "Approve the AirtelTigo Money prompt on your phone to complete your deposit."
         : "Approve the MTN MoMo prompt with your PIN to complete your deposit.";
 
@@ -579,7 +582,7 @@ function PaymentModal({
             <p className="text-[13px] text-[var(--color-ink-dim)]">
               Enter the verification code sent by SMS to <span className="font-semibold text-white num">{phone.trim()}</span>.
             </p>
-            {network === "telecel" && (
+            {network === "vod" && (
               <p className="text-[12px] text-[var(--color-amber)] bg-[var(--color-amber)]/10 border border-[var(--color-amber)]/25 rounded-lg px-3 py-2">
                 Telecel Cash: after the code, <span className="font-semibold">dial *110#</span> on your phone and approve the payment — there&apos;s no pop-up prompt.
               </p>
