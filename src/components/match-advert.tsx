@@ -11,6 +11,13 @@ const ROTATE_MS = 2 * 60 * 1000; // change the featured match every 2 minutes
 
 const MATCHES = [
   {
+    league: "World Cup",
+    home: { name: "Switzerland", flag: "/flags/switzerland.svg" },
+    away: { name: "Canada", flag: "/flags/canada.svg" },
+    when: "Today · 12:00",
+    odds: { home: "2.20", draw: "3.20", away: "2.95" },
+  },
+  {
     league: "FIFA World Cup 2026",
     home: { name: "Brazil", flag: "🇧🇷" },
     away: { name: "Argentina", flag: "🇦🇷" },
@@ -175,11 +182,22 @@ export function MatchAdvert() {
 }
 
 function Team({ name, flag }: { name: string; flag: string }) {
+  // Flags can be either an image path (downloaded SVG) or an emoji.
+  const isImage = flag.startsWith("/") || flag.startsWith("http");
   return (
     <div className="flex flex-col items-center gap-2 w-[34%]">
-      <span className="grid place-items-center w-16 h-16 rounded-full text-[38px] leading-none ring-2 ring-white/15 shadow-lg bg-black/30">
-        {flag}
-      </span>
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={flag}
+          alt={name}
+          className="w-16 h-16 rounded-full object-cover ring-2 ring-white/15 shadow-lg"
+        />
+      ) : (
+        <span className="grid place-items-center w-16 h-16 rounded-full text-[38px] leading-none ring-2 ring-white/15 shadow-lg bg-black/30">
+          {flag}
+        </span>
+      )}
       <span className="font-display font-extrabold text-[15px]">{name}</span>
     </div>
   );
