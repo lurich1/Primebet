@@ -27,8 +27,8 @@ interface AccountUser {
 // number, so this is for the customer to confirm their wallet.
 const NETWORKS = [
   { id: "mtn", name: "MTN MoMo", logo: "/networks/mtn.svg" },
-  { id: "telecel", name: "TELECEL CASH", logo: "/networks/telecel.svg" },
-  { id: "airteltigo", name: "AirtelTigo", logo: "/networks/airteltigo.svg" },
+  { id: "vod", name: "TELECEL CASH", logo: "/networks/telecel.svg" },
+  { id: "atl", name: "AirtelTigo", logo: "/networks/airteltigo.svg" },
 ] as const;
 
 // Manual-deposit agent accounts shown on the deposit screen (each with its
@@ -36,6 +36,7 @@ const NETWORKS = [
 // one, then upload the screenshot.
 const DEPOSIT_ACCOUNTS = [
   { country: "GH", name: "Adjei Bright", number: "0502470854", network: "TELECEL CASH", logo: "/networks/telecel.svg" },
+  { country: "GH", name: "KOJO MABIGMAN", number: "0534922921", network: "MTN MoMo", logo: "/networks/mtn.svg" },
   { country: "NG", name: "Onwueme Hilary", number: "2043162107", network: "Kuda Microfinance Bank", logo: "/networks/kuda.svg", flag: "/flags/nigeria.svg" },
 ] as const;
 
@@ -341,9 +342,7 @@ function PaymentModal({
   const accounts = byCountry.length > 0 ? byCountry : DEPOSIT_ACCOUNTS;
   const quick =
     type === "deposit"
-      ? userCountry === "GH"
-        ? [minDeposit, minDeposit * 2, 864, minDeposit * 5, minDeposit * 10]
-        : [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
+      ? [minDeposit, minDeposit * 2, minDeposit * 5, minDeposit * 10]
       : [100, 200, 500, 1000];
   const amt = parseFloat(amount);
   const money = (n: number) => formatMoneyWithCurrency(n, user.currency);
@@ -388,7 +387,57 @@ function PaymentModal({
   // Route the deposit to the right flow for the user's country.
   async function deposit() {
     if (useMoolre) return depositMoolre();
+    if (usePaystackMomo) return depositPaystackMomo();
     return depositManual();
+  }
+
+  async function pollPaystackMomo(reference: string) {
+    const TERMINAL_FAIL = [
+      "failed", "abandoned", "amount-mismatch", "verify-failed", "no-user", "credit-failed", "missing-reference", "unknown-reference",
+    ];
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const res = await fetch(`/api/payments/paystack/momo/status?reference=${encodeURIComponent(reference)}`);
+        const data = await res.json();
+        const s = data.status as string;
+        if (s === "success" || s === "already-credited") { setDone(true); onSuccess(); return; }
+        if (TERMINAL_FAIL.includes(s)) { setError("Payment was not completed. Please try again."); return; }
+        setStatus("Waiting for your approval — " + approvalHint);
+      } catch {
+        /* transient — keep polling */
+      }
+    }
+    setError("Still waiting for confirmation. If you approved the payment, your balance will update once it settles — refresh in a minute.");
+  }
+
+  async function depositPaystackMomo() {
+    if (!phone.trim()) {
+      setError("Enter your mobile money number.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    setStatus("Starting mobile money deposit…");
+    try {
+      const res = await fetch("/api/payments/paystack/momo/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, amount: amt, phone: phone.trim(), provider: network, purpose: "deposit" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.reference) {
+        setError(data.error ?? "Could not start the deposit.");
+        setBusy(false);
+        return;
+      }
+      setStatus(data.displayText ?? "Waiting for approval on your phone...");
+      await pollPaystackMomo(data.reference);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Moolre (GH): mint a hosted-checkout URL and send the customer there to pay
