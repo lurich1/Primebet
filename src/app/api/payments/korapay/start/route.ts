@@ -85,13 +85,14 @@ export async function POST(request: Request) {
     console.error('[korapay/start] pending ledger write failed:', e)
   }
 
-  // Korapay requires a customer email but we don't want to share the user's
-  // real address with the gateway. Send a stable per-user placeholder instead.
-  const placeholderEmail = `noreply+${userId}@primebet.app`
+  // Show the real customer on the Korapay account: send their actual email and
+  // name. Fall back to a Plusebet-branded placeholder only if a user somehow
+  // has no email on file (every account normally has one).
+  const customerEmail = user.email?.trim() || `customer+${userId}@plusebet.app`
 
   try {
     const init = await initialiseCharge({
-      email: placeholderEmail,
+      email: customerEmail,
       name: user.name,
       amount,
       currency: user.currency,
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
         publicKey: getKorapayPublicKey(user.country),
         amount,
         currency: user.currency,
-        email: placeholderEmail,
+        email: customerEmail,
       },
       { status: 201 },
     )
