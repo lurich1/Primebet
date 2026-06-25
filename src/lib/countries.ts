@@ -66,7 +66,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycLabel: 'Ghana Card number',
     kycPlaceholder: 'GHA-XXXXXXXXX-X',
     kycError: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)',
-    minFirstDeposit: 20,
+    minFirstDeposit: 200,
     verificationAmount: 200,
     withdrawQualifyTotal: 848,
     gateway: 'korapay',
