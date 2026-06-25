@@ -7,6 +7,7 @@ import { Loader2, UserPlus, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Brand } from '@/components/brand'
+import { COMMISSION_RATE } from '@/lib/domain-types'
 
 export default function SubAdminRegisterPage() {
   const router = useRouter()
@@ -59,7 +60,7 @@ export default function SubAdminRegisterPage() {
               </div>
               <h1 className="text-2xl font-bold text-foreground">Become a Partner</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Earn 70% commission on every deposit from users who sign up with your referral code.
+                Earn {Math.round(COMMISSION_RATE * 100)}% commission on every deposit from users who sign up with your referral code.
               </p>
             </div>
 

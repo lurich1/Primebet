@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Brand } from '@/components/brand'
 import { formatMoney } from '@/lib/format-money'
+import { COMMISSION_RATE } from '@/lib/domain-types'
 
 /** "GHS 12.34 · NGN 5,000.00" — single-line summary of a currency map. */
 function formatCurrencyMap(map: Record<string, number> | undefined): string {
@@ -203,7 +204,7 @@ export default function SubAdminDashboardPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Earn <b>70%</b> commission on every deposit from each referred user.
+                Earn <b>{Math.round(COMMISSION_RATE * 100)}%</b> commission on every deposit from each referred user.
               </p>
             </div>
             <div className="flex-1 lg:max-w-md">
