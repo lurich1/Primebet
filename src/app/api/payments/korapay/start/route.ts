@@ -86,9 +86,9 @@ export async function POST(request: Request) {
   }
 
   // Show the real customer on the Korapay account: send their actual email and
-  // name. Fall back to a Plusebet-branded placeholder only if a user somehow
-  // has no email on file (every account normally has one).
-  const customerEmail = user.email?.trim() || `customer+${userId}@plusebet.app`
+  // name. Fall back to a neutral placeholder only if a user somehow has no
+  // email on file (every account normally has one).
+  const customerEmail = user.email?.trim() || `customer+${userId}@pluse.app`
 
   try {
     const init = await initialiseCharge({
