@@ -58,7 +58,10 @@ export async function POST(request: Request) {
   const refPrefix = purpose === 'verification' ? 'KR-VRF' : 'KR-DEP'
   const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
   const origin = originFromRequest(request)
-  const redirectUrl = `${origin}/api/payments/korapay/callback?returnPath=${encodeURIComponent(returnPath)}`
+  // Bake our reference into the redirect URL so the callback can credit
+  // immediately on return, even if Korapay doesn't append its own ?reference.
+  // URLSearchParams.get() returns the first value, so ours wins regardless.
+  const redirectUrl = `${origin}/api/payments/korapay/callback?returnPath=${encodeURIComponent(returnPath)}&reference=${encodeURIComponent(reference)}`
   const notificationUrl = `${origin}/api/payments/korapay/webhook`
 
   try {
