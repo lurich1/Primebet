@@ -92,6 +92,22 @@ export default function AccountPage() {
       .catch(() => {});
   }, [refresh]);
 
+  // Same safety net for Korapay (GH + NG). There's no webhook on these
+  // accounts, so this load-time sweep is the backstop that credits any deposit
+  // whose redirect callback never fired.
+  useEffect(() => {
+    const id = getUserId();
+    if (!id) return;
+    fetch("/api/payments/korapay/reconcile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d?.credited > 0) void refresh(); })
+      .catch(() => {});
+  }, [refresh]);
+
   // Show a result banner when Moolre sends the player back here after checkout.
   useEffect(() => {
     const status = new URLSearchParams(window.location.search).get("moolre");
@@ -104,6 +120,21 @@ export default function AccountPage() {
         : "Your deposit wasn't completed. If you were charged, it'll reflect shortly.",
     });
     // Drop the ?moolre param so it doesn't re-show on refresh, and re-pull balance.
+    window.history.replaceState(null, "", window.location.pathname);
+    void refresh();
+  }, [refresh]);
+
+  // Same banner for the Korapay hosted-checkout return (?korapay=...).
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("korapay");
+    if (!status) return;
+    const ok = status === "success" || status === "already-credited";
+    setReturnMsg({
+      ok,
+      text: ok
+        ? "Deposit successful — your balance has been updated."
+        : "Your deposit wasn't completed. If you were charged, it'll reflect shortly.",
+    });
     window.history.replaceState(null, "", window.location.pathname);
     void refresh();
   }, [refresh]);
@@ -335,9 +366,15 @@ function PaymentModal({
   // GH uses Moolre's automated checkout; other countries use the manual
   // pay-an-agent + upload-screenshot flow.
   const useMoolre = getCountryForCurrency(cc).gateway === "moolre";
-  // Paystack mobile-money checkout (e.g. Ghana). NETWORK ids (mtn/vod/atl) are
+  // Korapay hosted checkout (Ghana + Nigeria): mint a one-time checkout URL and
+  // redirect the player there. Auto-credits on return via callback + webhook.
+  const useKorapay = getCountryForCurrency(cc).gateway === "korapay";
+  // Paystack mobile-money checkout. NETWORK ids (mtn/vod/atl) are
   // Paystack's GH provider codes, sent as `provider` to the start endpoint.
   const usePaystackMomo = getCountryForCurrency(cc).gateway === "paystack";
+  // Hosted redirect checkouts (Moolre, Korapay) skip the agent-account +
+  // screenshot UI: the player pays on the gateway page and we credit on return.
+  const useHostedCheckout = useMoolre || useKorapay;
   const minDeposit = getMinFirstDeposit(userCountry);
   // Show the deposit accounts for the user's country; fall back to all if none
   // are configured for their country (so deposits are never blocked).
@@ -390,8 +427,35 @@ function PaymentModal({
   // Route the deposit to the right flow for the user's country.
   async function deposit() {
     if (useMoolre) return depositMoolre();
+    if (useKorapay) return depositKorapay();
     if (usePaystackMomo) return depositPaystackMomo();
     return depositManual();
+  }
+
+  // Korapay (GH + NG): mint a one-time hosted-checkout URL and send the customer
+  // there. The callback re-verifies and auto-credits on return; the signed
+  // webhook is the backstop if they close the tab before redirecting.
+  async function depositKorapay() {
+    setError(null);
+    setBusy(true);
+    setStatus("Opening secure checkout…");
+    try {
+      const res = await fetch("/api/payments/korapay/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, amount: amt, returnPath: "/account" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Could not start the deposit.");
+        setBusy(false);
+        return;
+      }
+      window.location.href = data.url as string;
+    } catch {
+      setError("Network error — please try again.");
+      setBusy(false);
+    }
   }
 
   async function pollPaystackMomo(reference: string) {
@@ -639,16 +703,20 @@ function PaymentModal({
         ) : (
           <div className="p-5 space-y-4">
             {type === "deposit" ? (
-              useMoolre ? (
+              useHostedCheckout ? (
               <div className="rounded-xl border border-[var(--color-violet)]/30 bg-[var(--color-surface-2)] px-3.5 py-3.5">
-                <div className="flex items-center gap-2">
-                  {NETWORKS.map((n) => (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img key={n.id} src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain shrink-0" />
-                  ))}
-                </div>
-                <p className="text-[12px] text-[var(--color-ink-dim)] leading-snug mt-2.5">
-                  Continue to the secure page to pay with MTN MoMo, Telecel Cash or AirtelTigo Money — your balance updates automatically once paid.
+                {useMoolre && (
+                  <div className="flex items-center gap-2">
+                    {NETWORKS.map((n) => (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img key={n.id} src={n.logo} alt={n.name} className="w-8 h-8 rounded-md object-contain shrink-0" />
+                    ))}
+                  </div>
+                )}
+                <p className={cn("text-[12px] text-[var(--color-ink-dim)] leading-snug", useMoolre && "mt-2.5")}>
+                  {useKorapay
+                    ? "Continue to the secure checkout to pay with mobile money, card or bank transfer — your balance updates automatically once paid."
+                    : "Continue to the secure page to pay with MTN MoMo, Telecel Cash or AirtelTigo Money — your balance updates automatically once paid."}
                 </p>
               </div>
               ) : (
@@ -755,7 +823,7 @@ function PaymentModal({
               )}
             </div>
 
-            {type === "deposit" && !useMoolre && (
+            {type === "deposit" && !useHostedCheckout && (
               <div>
                 <label className="text-[11px] font-mono uppercase tracking-wide text-[var(--color-ink-faint)]">Payment screenshot</label>
                 <label className={cn(
@@ -787,14 +855,14 @@ function PaymentModal({
 
             <button
               onClick={type === "deposit" ? deposit : withdraw}
-              disabled={busy || !(amt > 0) || belowMin || (type === "deposit" && !useMoolre && !file) || (type === "withdraw" && !phone.trim())}
+              disabled={busy || !(amt > 0) || belowMin || (type === "deposit" && !useHostedCheckout && !file) || (type === "withdraw" && !phone.trim())}
               className="w-full rounded-xl py-3.5 font-display font-extrabold text-[14px] grad-violet-pink text-white disabled:opacity-50 active:scale-[.99] transition capitalize flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
               {type === "deposit"
                 ? busy
-                  ? (useMoolre ? "Redirecting…" : "Submitting…")
-                  : `${useMoolre ? "Deposit" : "Submit deposit"} ${amt > 0 ? money(amt) : ""}`
+                  ? (useHostedCheckout ? "Redirecting…" : "Submitting…")
+                  : `${useHostedCheckout ? "Deposit" : "Submit deposit"} ${amt > 0 ? money(amt) : ""}`
                 : `Withdraw ${amt > 0 ? money(amt) : ""}`}
             </button>
           </div>

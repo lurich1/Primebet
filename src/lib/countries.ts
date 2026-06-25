@@ -10,7 +10,7 @@ export type CountryCode =
 export type CurrencyCode =
   | 'GHS' | 'NGN' | 'KES' | 'ZAR'
   | 'UGX' | 'TZS' | 'XAF' | 'ZMW' | 'USD' | 'GBP' | 'XOF' | 'RWF'
-export type Gateway = 'moolre' | 'paystack' | 'manual'
+export type Gateway = 'moolre' | 'paystack' | 'korapay' | 'manual'
 
 export interface PayoutNetwork {
   key: string
@@ -69,7 +69,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     minFirstDeposit: 200,
     verificationAmount: 200,
     withdrawQualifyTotal: 848,
-    gateway: 'paystack',
+    gateway: 'korapay',
     payoutTarget: 'mobile',
     payoutNetworks: [
       { key: 'mtn', label: 'MTN MoMo' },
@@ -91,7 +91,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycError: 'BVN or NIN must be exactly 11 digits',
     minFirstDeposit: 30000,
     verificationAmount: 30000,
-    gateway: 'manual',
+    gateway: 'korapay',
     payoutTarget: 'bank',
     payoutNetworks: [
       { key: 'bank', label: 'Bank account' },
