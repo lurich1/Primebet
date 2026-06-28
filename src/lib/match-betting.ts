@@ -289,7 +289,7 @@ export function minutesUntilEnd(match: Match): number | null {
 
 export interface BettingState {
   closed: boolean
-  reason: 'starting-soon' | 'started' | 'finished' | 'admin-locked' | null
+  reason: 'starting-soon' | 'started' | 'finished' | 'admin-locked' | 'postponed' | null
   /** Minutes remaining until the cutoff event (start or end). 0 = already cut off. */
   minutesRemaining: number | null
 }
@@ -305,6 +305,10 @@ export interface BettingState {
  *     (started — admin still has to mark it live or final).
  */
 export function getBettingState(match: Match, now: Date = new Date()): BettingState {
+  if (match.postponed) {
+    return { closed: true, reason: 'postponed', minutesRemaining: 0 }
+  }
+
   if (match.locked) {
     return { closed: true, reason: 'admin-locked', minutesRemaining: 0 }
   }

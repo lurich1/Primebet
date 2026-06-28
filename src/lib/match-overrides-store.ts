@@ -7,6 +7,7 @@ export interface MatchOverride {
   minute: string | null
   isLive: boolean | null
   locked: boolean
+  postponed: boolean
   updatedAt: string
 }
 
@@ -17,6 +18,7 @@ interface MatchOverrideRow {
   minute: string | null
   is_live: boolean | null
   locked: boolean
+  postponed: boolean | null
   updated_at: string
 }
 
@@ -28,6 +30,7 @@ function rowToOverride(row: MatchOverrideRow): MatchOverride {
     minute: row.minute,
     isLive: row.is_live,
     locked: row.locked,
+    postponed: row.postponed ?? false,
     updatedAt: row.updated_at,
   }
 }
@@ -62,6 +65,7 @@ export interface MatchOverridePatch {
   minute?: string | null
   isLive?: boolean | null
   locked?: boolean
+  postponed?: boolean
 }
 
 export async function upsertMatchOverride(
@@ -74,6 +78,7 @@ export async function upsertMatchOverride(
   if (patch.minute !== undefined) row.minute = patch.minute
   if (patch.isLive !== undefined) row.is_live = patch.isLive
   if (patch.locked !== undefined) row.locked = patch.locked
+  if (patch.postponed !== undefined) row.postponed = patch.postponed
 
   const { data, error } = await supabaseServer()
     .from('match_overrides')

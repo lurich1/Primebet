@@ -54,6 +54,7 @@ function applyOverride(m: Match, o: MatchOverride | undefined): Match {
   if (o.minute !== null && o.minute !== undefined) next.minute = o.minute
   if (o.isLive !== null && o.isLive !== undefined) next.isLive = o.isLive
   if (o.locked) next.locked = true
+  if (o.postponed) next.postponed = true
   return next
 }
 

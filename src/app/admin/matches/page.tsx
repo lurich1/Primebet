@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, RefreshCcw, AlertCircle, CheckCircle2, Pencil, Lock, Unlock, RotateCcw } from 'lucide-react'
+import { Loader2, RefreshCcw, AlertCircle, CheckCircle2, Pencil, Lock, Unlock, RotateCcw, CalendarOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -179,6 +179,7 @@ export default function AdminMatchesPage() {
                 key={m.id}
                 match={m}
                 onLockToggle={() => applyOverride(m.id, { locked: !m.locked })}
+                onPostponeToggle={() => applyOverride(m.id, { postponed: !m.postponed })}
                 onApply={(patch) => applyOverride(m.id, patch)}
                 onClear={() => clearOverride(m.id)}
               />
@@ -193,11 +194,12 @@ export default function AdminMatchesPage() {
 interface MatchRowProps {
   match: Match
   onLockToggle: () => void
+  onPostponeToggle: () => void
   onApply: (patch: { homeScore?: number; awayScore?: number; minute?: string; isLive?: boolean }) => void
   onClear: () => void
 }
 
-function MatchRow({ match, onLockToggle, onApply, onClear }: MatchRowProps) {
+function MatchRow({ match, onLockToggle, onPostponeToggle, onApply, onClear }: MatchRowProps) {
   const [editing, setEditing] = useState(false)
   const [home, setHome] = useState(String(match.homeScore ?? 0))
   const [away, setAway] = useState(String(match.awayScore ?? 0))
@@ -253,6 +255,12 @@ function MatchRow({ match, onLockToggle, onApply, onClear }: MatchRowProps) {
               Locked
             </span>
           )}
+          {match.postponed && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 bg-amber-500/10 flex items-center gap-1">
+              <CalendarOff className="w-2.5 h-2.5" />
+              Postponed
+            </span>
+          )}
         </div>
         <div className="md:order-2 min-w-0">
           <p className="font-medium text-sm truncate">
@@ -294,6 +302,15 @@ function MatchRow({ match, onLockToggle, onApply, onClear }: MatchRowProps) {
                 title={match.locked ? 'Unlock' : 'Lock'}
               >
                 {match.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onPostponeToggle}
+                className={`h-7 px-2 text-xs ${match.postponed ? 'text-amber-600 border-amber-500/40 hover:bg-amber-500/10' : ''}`}
+                title={match.postponed ? 'Un-postpone' : 'Mark postponed'}
+              >
+                <CalendarOff className="w-3 h-3" />
               </Button>
               <Button
                 size="sm"

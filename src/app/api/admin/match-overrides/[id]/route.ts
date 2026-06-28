@@ -42,6 +42,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (body.minute !== undefined) patch.minute = body.minute
   if (body.isLive !== undefined) patch.isLive = body.isLive
   if (body.locked !== undefined) patch.locked = body.locked
+  if (body.postponed !== undefined) patch.postponed = body.postponed
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'no valid fields to update' }, { status: 400 })
   }

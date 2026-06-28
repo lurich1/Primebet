@@ -39,6 +39,9 @@ export interface Match {
   countryFlagUrl?: string
   /** Admin manual lock — when true, no new bets are accepted regardless of isLive / startTime. */
   locked?: boolean
+  /** Admin marked the match postponed — players see a "Postponed" badge and
+   *  new bets are locked. Existing bets are left untouched. */
+  postponed?: boolean
   /** Scripted goal timeline (custom matches): drives the live score off the clock. */
   goals?: MatchGoal[]
 }

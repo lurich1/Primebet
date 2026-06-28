@@ -15,6 +15,7 @@ const LOCK_LABEL: Record<string, string> = {
   started: 'Started',
   finished: 'Ended',
   'admin-locked': 'Locked',
+  postponed: 'Postponed',
 }
 
 // Deterministic team-badge palette. Same name always lands on the same colour
