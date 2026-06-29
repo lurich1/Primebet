@@ -93,6 +93,9 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycError: 'BVN or NIN must be exactly 11 digits',
     minFirstDeposit: 30000,
     verificationAmount: 30000,
+    // Cumulative deposits a player must reach before withdrawals unlock —
+    // the NGN equivalent of Ghana's 848 GHS qualifying total.
+    withdrawQualifyTotal: 83571.79,
     gateway: 'korapay',
     // Nigeria withdraws via mobile money, same flow as Ghana (network + phone),
     // rather than the bank-account path.
