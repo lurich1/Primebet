@@ -53,10 +53,17 @@ export default function RegisterPage() {
   }, []);
 
   const country = COUNTRIES.find((c) => c.dial === dial) ?? COUNTRIES[0];
+  // Ghana collects the Ghana Card at signup; other countries only show the KYC
+  // field when they strictly require it.
+  const showKyc = country.needsKyc || country.iso === "GH";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (showKyc && !kyc.trim()) {
+      setError(`${country.kyc} is required`);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/users/register", {
@@ -123,7 +130,7 @@ export default function RegisterPage() {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
         </Field>
 
-        {country.needsKyc && (
+        {showKyc && (
           <Field label={country.kyc}>
             <input value={kyc} onChange={(e) => setKyc(e.target.value)} placeholder={country.kycHint} className={inputCls} />
           </Field>

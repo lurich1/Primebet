@@ -142,6 +142,42 @@ export default function SubAdminDashboardPage() {
     }
   }
 
+  // Group every commission by local calendar day so each day's earnings are
+  // preserved as history once the day rolls over. The lifetime balance is never
+  // reset — this is just a per-day view of what was earned.
+  const dayStartMs = (d: Date) => {
+    const x = new Date(d)
+    x.setHours(0, 0, 0, 0)
+    return x.getTime()
+  }
+  const todayKey = dayStartMs(new Date())
+  const yesterdayKey = todayKey - 86_400_000
+  const byDay = new Map<number, { totals: Record<string, number>; count: number }>()
+  for (const c of data.commissions) {
+    const k = dayStartMs(new Date(c.createdAt))
+    const entry = byDay.get(k) ?? { totals: {}, count: 0 }
+    entry.totals[c.currency] = +((entry.totals[c.currency] ?? 0) + c.commission).toFixed(2)
+    entry.count++
+    byDay.set(k, entry)
+  }
+  const dailyEarnings = [...byDay.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([k, v]) => ({
+      key: k,
+      label:
+        k === todayKey
+          ? 'Today'
+          : k === yesterdayKey
+            ? 'Yesterday'
+            : new Date(k).toLocaleDateString(undefined, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              }),
+      totals: v.totals,
+      count: v.count,
+    }))
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-30">
@@ -256,6 +292,48 @@ export default function SubAdminDashboardPage() {
             sub={`${todayCount} deposit${todayCount === 1 ? '' : 's'} today`}
             tone="good"
           />
+        </section>
+
+        {/* Daily earnings history */}
+        <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <header className="px-4 py-3 border-b border-border">
+            <h2 className="font-semibold">Daily earnings</h2>
+            <p className="text-xs text-muted-foreground">
+              What you earned each day. Today&apos;s total rolls into history when the
+              next day starts — your balance is never reset.
+            </p>
+          </header>
+          {dailyEarnings.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              No commission yet. Earnings will appear here day by day.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {dailyEarnings.map((d) => (
+                <li
+                  key={d.key}
+                  className="px-4 py-3 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm flex items-center gap-2">
+                      {d.label}
+                      {d.key === todayKey && (
+                        <span className="text-[9px] uppercase tracking-wide text-success border border-success/30 bg-success/10 rounded-full px-1.5 py-0.5">
+                          Live
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {d.count} deposit{d.count === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold tabular-nums text-success text-right">
+                    +{formatCurrencyMap(d.totals)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Referred users table */}
