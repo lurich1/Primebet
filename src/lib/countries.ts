@@ -71,10 +71,12 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     withdrawQualifyTotal: 848,
     gateway: 'korapay',
     payoutTarget: 'mobile',
+    // Keys match the withdraw form's network ids (mtn/vod/atl) so all three
+    // validate, not just MTN.
     payoutNetworks: [
       { key: 'mtn', label: 'MTN MoMo' },
-      { key: 'telecel', label: 'Telecel Cash' },
-      { key: 'airteltigo', label: 'AirtelTigo Money' },
+      { key: 'vod', label: 'Telecel Cash' },
+      { key: 'atl', label: 'AirtelTigo Money' },
     ],
   },
   NG: {
@@ -92,9 +94,13 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     minFirstDeposit: 30000,
     verificationAmount: 30000,
     gateway: 'korapay',
-    payoutTarget: 'bank',
+    // Nigeria withdraws via mobile money, same flow as Ghana (network + phone),
+    // rather than the bank-account path.
+    payoutTarget: 'mobile',
     payoutNetworks: [
-      { key: 'bank', label: 'Bank account' },
+      { key: 'mtn', label: 'MTN MoMo' },
+      { key: 'vod', label: 'Telecel Cash' },
+      { key: 'atl', label: 'AirtelTigo Money' },
     ],
   },
   KE: {
