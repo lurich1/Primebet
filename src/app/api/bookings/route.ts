@@ -7,12 +7,43 @@ import {
 } from '@/lib/bookings-store'
 import { getMatchesForSport, supportedSports } from '@/lib/api/odds'
 import { readCustomMatchesForSport } from '@/lib/custom-matches-store'
+import { getBettingState } from '@/lib/match-betting'
+import type { Match } from '@/lib/domain-types'
 
 export const dynamic = 'force-dynamic'
 
-// A booking is playable until roughly when its games end. We expire it at the
-// latest selection kickoff plus this buffer (a generous single-match duration).
-const MATCH_DURATION_MS = 3 * 60 * 60 * 1000
+const EXPIRED_MESSAGE =
+  'This booking code has expired — the games have already started.'
+
+/** Every current match (live feed + custom), keyed by id. */
+async function buildMatchMap(): Promise<Map<string, Match>> {
+  const map = new Map<string, Match>()
+  for (const sport of supportedSports()) {
+    const [customs, api] = await Promise.all([
+      readCustomMatchesForSport(sport).catch(() => [] as Match[]),
+      getMatchesForSport(sport).catch(() => [] as Match[]),
+    ])
+    for (const m of [...customs, ...api]) map.set(m.id, m)
+  }
+  return map
+}
+
+/**
+ * A booking is playable only while ALL its games are still open for betting.
+ * The moment any selection's match kicks off (or is otherwise locked), the
+ * accumulator can't be placed, so the code is treated as expired. Matches that
+ * have finished and dropped out of the feed are caught by the stored
+ * expires_at fast-path in the GET handler.
+ */
+function anySelectionStarted(
+  selections: BookingSelection[],
+  matches: Map<string, Match>,
+): boolean {
+  return selections.some((s) => {
+    const m = matches.get(s.matchId)
+    return m ? getBettingState(m).closed : false
+  })
+}
 
 // Load a booked slip by its code so it can be dropped back into the bet slip.
 export async function GET(request: Request) {
@@ -25,35 +56,39 @@ export async function GET(request: Request) {
   if (!booking) {
     return NextResponse.json({ error: 'code not found' }, { status: 404 })
   }
+
+  // Fast path: stored expiry (set at creation once the games are done).
   if (isBookingExpired(booking)) {
-    return NextResponse.json(
-      { error: 'This booking code has expired — the games have already started.', expired: true },
-      { status: 410 },
-    )
+    return NextResponse.json({ error: EXPIRED_MESSAGE, expired: true }, { status: 410 })
   }
+
+  // Live check: expire as soon as any game has kicked off. Works even when the
+  // expires_at column hasn't been migrated yet, so a stale code never opens.
+  try {
+    const matches = await buildMatchMap()
+    if (anySelectionStarted(booking.selections, matches)) {
+      return NextResponse.json({ error: EXPIRED_MESSAGE, expired: true }, { status: 410 })
+    }
+  } catch {
+    // If the feed is unavailable, fall back to the stored expiry alone.
+  }
+
   return NextResponse.json({ booking })
 }
 
-/**
- * Latest kickoff (ISO) among the given match ids, or null if none resolve.
- * At booking time every selection is still upcoming, so its match is present in
- * the live feed / custom list and carries a startTimeISO.
- */
-async function latestKickoff(matchIds: string[]): Promise<string | null> {
-  const wanted = new Set(matchIds)
-  let latestMs: number | null = null
-  for (const sport of supportedSports()) {
-    const [customs, api] = await Promise.all([
-      readCustomMatchesForSport(sport).catch(() => []),
-      getMatchesForSport(sport).catch(() => []),
-    ])
-    for (const m of [...customs, ...api]) {
-      if (!wanted.has(m.id) || !m.startTimeISO) continue
-      const t = new Date(m.startTimeISO).getTime()
-      if (Number.isFinite(t)) latestMs = latestMs === null ? t : Math.max(latestMs, t)
-    }
+/** Earliest kickoff (ISO) among the given match ids, or null if none resolve. */
+function earliestKickoff(
+  matchIds: string[],
+  matches: Map<string, Match>,
+): string | null {
+  let earliestMs: number | null = null
+  for (const id of matchIds) {
+    const iso = matches.get(id)?.startTimeISO
+    if (!iso) continue
+    const t = new Date(iso).getTime()
+    if (Number.isFinite(t)) earliestMs = earliestMs === null ? t : Math.min(earliestMs, t)
   }
-  return latestMs === null ? null : new Date(latestMs).toISOString()
+  return earliestMs === null ? null : new Date(earliestMs).toISOString()
 }
 
 // Book a slip: save the selections and hand back a short code. No stake, no
@@ -82,14 +117,12 @@ export async function POST(request: Request) {
   }))
   const totalOdds = clean.reduce((acc, s) => acc * (s.odds || 1), 1)
 
-  // Expire the code once the last game should be over. If we can't resolve any
-  // kickoff (all selections already gone), leave it null so the code still works.
+  // Expire the code when the first game kicks off — the slip can't be placed
+  // once any leg has started. Null if no kickoff resolves (code won't expire).
   let expiresAt: string | null = null
   try {
-    const latest = await latestKickoff(clean.map((s) => s.matchId))
-    if (latest) {
-      expiresAt = new Date(new Date(latest).getTime() + MATCH_DURATION_MS).toISOString()
-    }
+    const matches = await buildMatchMap()
+    expiresAt = earliestKickoff(clean.map((s) => s.matchId), matches)
   } catch {
     // Non-fatal — booking without an expiry beats failing the whole request.
   }
