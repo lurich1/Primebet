@@ -18,6 +18,8 @@ export interface Booking {
   createdAt: string
   totalOdds: number
   selections: BookingSelection[]
+  /** When the code stops working (latest kickoff + buffer). Null = never. */
+  expiresAt: string | null
 }
 
 interface BookingRow {
@@ -25,6 +27,14 @@ interface BookingRow {
   created_at: string
   total_odds: number
   selections: BookingSelection[]
+  expires_at: string | null
+}
+
+/** A booking is expired once now is past its expires_at (if one was set). */
+export function isBookingExpired(booking: Booking, now: Date = new Date()): boolean {
+  if (!booking.expiresAt) return false
+  const t = new Date(booking.expiresAt).getTime()
+  return Number.isFinite(t) && now.getTime() > t
 }
 
 // Same human-friendly alphabet the bet codes use (no 0/O/1/I/L mix-ups).
@@ -56,17 +66,19 @@ function rowToBooking(row: BookingRow): Booking {
     createdAt: row.created_at,
     totalOdds: Number(row.total_odds),
     selections: Array.isArray(row.selections) ? row.selections : [],
+    expiresAt: row.expires_at ?? null,
   }
 }
 
 export async function createBooking(
   selections: BookingSelection[],
   totalOdds: number,
+  expiresAt: string | null = null,
 ): Promise<Booking> {
   const code = await generateUniqueBookingCode()
   const { data, error } = await supabaseServer()
     .from('bookings')
-    .insert({ code, total_odds: totalOdds, selections })
+    .insert({ code, total_odds: totalOdds, selections, expires_at: expiresAt })
     .select('*')
     .single()
   if (error) throw new Error(`bookings.create: ${error.message}`)

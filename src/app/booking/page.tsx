@@ -30,6 +30,11 @@ export default function BookingPage() {
         setError("No booking found with that code. Check and try again.");
         return;
       }
+      if (res.status === 410) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "This booking code has expired.");
+        return;
+      }
       if (!res.ok) {
         setError("Couldn't load that code — please try again.");
         return;
