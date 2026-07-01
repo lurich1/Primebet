@@ -2,18 +2,14 @@ import { NextResponse } from 'next/server'
 import {
   createBooking,
   findBookingByCode,
-  isBookingExpired,
   type BookingSelection,
 } from '@/lib/bookings-store'
 import { getMatchesForSport, supportedSports } from '@/lib/api/odds'
 import { readCustomMatchesForSport } from '@/lib/custom-matches-store'
-import { getBettingState } from '@/lib/match-betting'
+import { getBettingState, liveClockLabel } from '@/lib/match-betting'
 import type { Match } from '@/lib/domain-types'
 
 export const dynamic = 'force-dynamic'
-
-const EXPIRED_MESSAGE =
-  'This booking code has expired — the games have already started.'
 
 /** Every current match (live feed + custom), keyed by id. */
 async function buildMatchMap(): Promise<Map<string, Match>> {
@@ -28,24 +24,68 @@ async function buildMatchMap(): Promise<Map<string, Match>> {
   return map
 }
 
-/**
- * A booking is playable only while ALL its games are still open for betting.
- * The moment any selection's match kicks off (or is otherwise locked), the
- * accumulator can't be placed, so the code is treated as expired. Matches that
- * have finished and dropped out of the feed are caught by the stored
- * expires_at fast-path in the GET handler.
- */
-function anySelectionStarted(
-  selections: BookingSelection[],
-  matches: Map<string, Match>,
-): boolean {
-  return selections.some((s) => {
-    const m = matches.get(s.matchId)
-    return m ? getBettingState(m).closed : false
-  })
+type LegState = 'upcoming' | 'live' | 'finished'
+type LegResult = 'won' | 'lost' | 'pending'
+
+interface EnrichedLeg extends BookingSelection {
+  state: LegState
+  homeScore: number | null
+  awayScore: number | null
+  minute: string | null
+  kickoff: string | null
+  result: LegResult
 }
 
-// Load a booked slip by its code so it can be dropped back into the bet slip.
+function isFinished(m: Match): boolean {
+  if (m.minute === 'FT') return true
+  return liveClockLabel(m.startTimeISO, m.sport).label === 'FT'
+}
+
+function legState(m: Match | undefined): LegState {
+  if (!m) return 'upcoming'
+  if (isFinished(m)) return 'finished'
+  if (m.isLive) return 'live'
+  return 'upcoming'
+}
+
+/**
+ * Grade a Match-Result (1X2) pick against the final score. Only judgeable once
+ * the match is finished with a score; every other market / unfinished game
+ * stays 'pending'.
+ */
+function gradePick(pick: string, market: string, m: Match | undefined): LegResult {
+  if (!m || !isFinished(m) || m.homeScore == null || m.awayScore == null) return 'pending'
+  if (!/match result|1x2|^result$/i.test(market)) return 'pending'
+
+  const actual: 'home' | 'draw' | 'away' =
+    m.homeScore > m.awayScore ? 'home' : m.homeScore < m.awayScore ? 'away' : 'draw'
+  const p = pick.trim()
+  const mapped: 'home' | 'draw' | 'away' | null =
+    /^draw$/i.test(p) || p.toLowerCase() === 'x'
+      ? 'draw'
+      : p === m.homeTeam
+        ? 'home'
+        : p === m.awayTeam
+          ? 'away'
+          : null
+  if (!mapped) return 'pending'
+  return mapped === actual ? 'won' : 'lost'
+}
+
+function enrichLeg(leg: BookingSelection, m: Match | undefined): EnrichedLeg {
+  return {
+    ...leg,
+    state: legState(m),
+    homeScore: m?.homeScore ?? null,
+    awayScore: m?.awayScore ?? null,
+    minute: m?.minute ?? null,
+    kickoff: m?.startTimeISO ?? null,
+    result: gradePick(leg.pick, leg.market, m),
+  }
+}
+
+// Load a booked slip: its selections, each enriched with live score / final
+// result, plus whether it can still be loaded into the slip (all games open).
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')?.trim()
@@ -57,30 +97,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'code not found' }, { status: 404 })
   }
 
-  // Fast path: stored expiry (set at creation once the games are done).
-  if (isBookingExpired(booking)) {
-    return NextResponse.json({ error: EXPIRED_MESSAGE, expired: true }, { status: 410 })
-  }
-
-  // Live check: expire as soon as any game has kicked off. Works even when the
-  // expires_at column hasn't been migrated yet, so a stale code never opens.
+  let matches = new Map<string, Match>()
   try {
-    const matches = await buildMatchMap()
-    if (anySelectionStarted(booking.selections, matches)) {
-      return NextResponse.json({ error: EXPIRED_MESSAGE, expired: true }, { status: 410 })
-    }
+    matches = await buildMatchMap()
   } catch {
-    // If the feed is unavailable, fall back to the stored expiry alone.
+    // Feed unavailable — return the raw booking so it can still load.
   }
 
-  return NextResponse.json({ booking })
+  const legs = booking.selections.map((s) => enrichLeg(s, matches.get(s.matchId)))
+  // Playable only while every game is still open for betting (none kicked off).
+  const playable = booking.selections.every((s) => {
+    const m = matches.get(s.matchId)
+    return m ? !getBettingState(m).closed : true
+  })
+
+  return NextResponse.json({ booking, legs, playable })
 }
 
 /** Earliest kickoff (ISO) among the given match ids, or null if none resolve. */
-function earliestKickoff(
-  matchIds: string[],
-  matches: Map<string, Match>,
-): string | null {
+function earliestKickoff(matchIds: string[], matches: Map<string, Match>): string | null {
   let earliestMs: number | null = null
   for (const id of matchIds) {
     const iso = matches.get(id)?.startTimeISO

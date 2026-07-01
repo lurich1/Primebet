@@ -187,11 +187,6 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
         setLoadError("No booking found with that code.");
         return;
       }
-      if (res.status === 410) {
-        const data = await res.json().catch(() => ({}));
-        setLoadError(data.error ?? "This booking code has expired.");
-        return;
-      }
       if (!res.ok) {
         setLoadError("Couldn't load that code — please try again.");
         return;
@@ -200,6 +195,10 @@ function SlipBody({ onPlaced }: { onPlaced?: () => void }) {
       const sels: Selection[] = data.booking?.selections ?? [];
       if (sels.length === 0) {
         setLoadError("That booking has no selections.");
+        return;
+      }
+      if (data.playable === false) {
+        setLoadError("This booking's games have already started. Open it on the Booking page to see live scores and results.");
         return;
       }
       clear();
